@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>vLLM WebUI - Server Management & Chat Interface</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>🚀 vLLM WebUI</h1>
+                <div class="status-indicator">
+                    <span id="status-dot" class="status-dot"></span>
+                    <span id="status-text">Disconnected</span>
+                    <span id="uptime" class="uptime"></span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Sidebar - Configuration -->
+            <aside class="sidebar resizable" id="config-panel">
+                <div class="panel">
+                    <h2>⚙️ Server Configuration</h2>
+                    
+                    <div class="form-group">
+                        <label for="model-select">Model</label>
+                        <select id="model-select" class="form-control">
+                            <option value="facebook/opt-125m">facebook/opt-125m (125M)</option>
+                            <option value="facebook/opt-350m">facebook/opt-350m (350M)</option>
+                            <option value="facebook/opt-1.3b">facebook/opt-1.3b (1.3B)</option>
+                            <option value="facebook/opt-2.7b">facebook/opt-2.7b (2.7B)</option>
+                            <option value="meta-llama/Llama-2-7b-chat-hf">Llama-2-7b-chat-hf (7B)</option>
+                            <option value="meta-llama/Llama-2-13b-chat-hf">Llama-2-13b-chat-hf (13B)</option>
+                            <option value="mistralai/Mistral-7B-Instruct-v0.2">Mistral-7B-Instruct (7B)</option>
+                            <option value="codellama/CodeLlama-7b-Instruct-hf">CodeLlama-7b-Instruct (7B)</option>
+                        </select>
+                        <small class="form-help">Or enter custom model name</small>
+                        <input type="text" id="custom-model" class="form-control" placeholder="Custom model name">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="host">Host</label>
+                            <input type="text" id="host" class="form-control" value="0.0.0.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="port">Port</label>
+                            <input type="number" id="port" class="form-control" value="8000">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="tensor-parallel">Tensor Parallel Size</label>
+                            <input type="number" id="tensor-parallel" class="form-control" value="1" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label for="gpu-memory">GPU Memory (%)</label>
+                            <input type="number" id="gpu-memory" class="form-control" value="90" min="10" max="100" step="5">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="dtype">Data Type</label>
+                        <select id="dtype" class="form-control">
+                            <option value="auto">Auto</option>
+                            <option value="float16">Float16</option>
+                            <option value="bfloat16">BFloat16</option>
+                            <option value="float32">Float32</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="max-model-len">Max Model Length (optional)</label>
+                        <input type="number" id="max-model-len" class="form-control" placeholder="Auto">
+                    </div>
+
+                    <div class="form-group checkbox-group">
+                        <label>
+                            <input type="checkbox" id="trust-remote-code">
+                            <span>Trust Remote Code</span>
+                        </label>
+                    </div>
+
+                    <div class="form-group checkbox-group">
+                        <label>
+                            <input type="checkbox" id="enable-prefix-caching">
+                            <span>Enable Prefix Caching</span>
+                        </label>
+                    </div>
+
+                    <div class="form-group checkbox-group">
+                        <label>
+                            <input type="checkbox" id="disable-log-stats">
+                            <span>Disable Log Stats</span>
+                        </label>
+                    </div>
+
+                    <!-- Command Preview Section -->
+                    <div class="command-preview-section">
+                        <div class="command-preview-header">
+                            <h3>🖥️ Command Preview</h3>
+                            <button id="copy-command-btn" class="btn btn-secondary btn-sm" title="Copy command">📋 Copy</button>
+                        </div>
+                        <div id="command-preview" class="command-preview">
+                            <code id="command-text">python -m vllm.entrypoints.openai.api_server --model facebook/opt-125m</code>
+                        </div>
+                        <small class="command-help">This command will be executed when you start the server</small>
+                    </div>
+
+                    <div class="button-group">
+                        <button id="start-btn" class="btn btn-primary">▶️ Start Server</button>
+                        <button id="stop-btn" class="btn btn-danger" disabled>⏹️ Stop Server</button>
+                    </div>
+                </div>
+                <div class="resize-handle resize-handle-vertical" data-direction="horizontal"></div>
+            </aside>
+
+            <!-- Center - Chat Interface -->
+            <main class="chat-section resizable" id="chat-panel">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>💬 Chat Interface</h2>
+                        <button id="clear-chat-btn" class="btn btn-secondary btn-sm">Clear</button>
+                    </div>
+                    
+                    <div id="chat-container" class="chat-container">
+                        <div class="chat-message system">
+                            <div class="message-content">
+                                <strong>System:</strong> Start the vLLM server and begin chatting with your model.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="chat-input-area">
+                        <div class="generation-params">
+                            <div class="param-group">
+                                <label for="temperature">Temperature: <span id="temp-value">0.7</span></label>
+                                <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.7">
+                            </div>
+                            <div class="param-group">
+                                <label for="max-tokens">Max Tokens: <span id="tokens-value">512</span></label>
+                                <input type="range" id="max-tokens" min="1" max="4096" step="1" value="512">
+                            </div>
+                        </div>
+                        
+                        <div class="input-group">
+                            <textarea id="chat-input" class="chat-input" placeholder="Type your message here..." rows="3"></textarea>
+                            <button id="send-btn" class="btn btn-primary" disabled>Send</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="resize-handle resize-handle-vertical" data-direction="horizontal"></div>
+            </main>
+
+            <!-- Right Panel - Logs -->
+            <aside class="logs-section resizable" id="logs-panel">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>📋 Server Logs</h2>
+                        <button id="clear-logs-btn" class="btn btn-secondary btn-sm">Clear</button>
+                    </div>
+                    <div id="logs-container" class="logs-container">
+                        <div class="log-entry info">Waiting for connection...</div>
+                    </div>
+                    <div class="logs-footer">
+                        <label>
+                            <input type="checkbox" id="auto-scroll" checked>
+                            <span>Auto-scroll</span>
+                        </label>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <!-- Horizontal Resize Handle for Metrics Section -->
+        <div class="resize-handle resize-handle-horizontal" id="metrics-resize-handle" data-direction="vertical"></div>
+
+        <!-- Performance Metrics Section -->
+        <section class="metrics-section resizable" id="metrics-panel">
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>📊 Performance Metrics (GuideLLM)</h2>
+                    <div class="metrics-controls">
+                        <button id="run-benchmark-btn" class="btn btn-primary btn-sm" disabled>▶️ Run Benchmark</button>
+                        <button id="stop-benchmark-btn" class="btn btn-danger btn-sm" disabled style="display: none;">⏹️ Stop</button>
+                    </div>
+                </div>
+
+                <!-- Benchmark Configuration -->
+                <div class="benchmark-config">
+                    <div class="config-row">
+                        <div class="config-item">
+                            <label for="benchmark-requests">Total Requests:</label>
+                            <input type="number" id="benchmark-requests" class="form-control-sm" value="100" min="10" max="1000">
+                        </div>
+                        <div class="config-item">
+                            <label for="benchmark-rate">Request Rate (req/s):</label>
+                            <input type="number" id="benchmark-rate" class="form-control-sm" value="5" min="1" max="50">
+                        </div>
+                        <div class="config-item">
+                            <label for="benchmark-prompt-tokens">Prompt Tokens:</label>
+                            <input type="number" id="benchmark-prompt-tokens" class="form-control-sm" value="100" min="10" max="2048">
+                        </div>
+                        <div class="config-item">
+                            <label for="benchmark-output-tokens">Output Tokens:</label>
+                            <input type="number" id="benchmark-output-tokens" class="form-control-sm" value="100" min="10" max="2048">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Metrics Display -->
+                <div id="metrics-display" class="metrics-display">
+                    <div class="metrics-placeholder">
+                        <p>⏱️ No benchmark data available</p>
+                        <p class="metrics-help">Start the vLLM server and click "Run Benchmark" to test performance</p>
+                    </div>
+                </div>
+
+                <!-- Metrics Grid -->
+                <div id="metrics-grid" class="metrics-grid" style="display: none;">
+                    <!-- Throughput Metrics -->
+                    <div class="metric-card">
+                        <div class="metric-icon">🚀</div>
+                        <div class="metric-label">Throughput</div>
+                        <div class="metric-value" id="metric-throughput">-- req/s</div>
+                        <div class="metric-subtext">Requests per second</div>
+                    </div>
+
+                    <!-- Latency Metrics -->
+                    <div class="metric-card">
+                        <div class="metric-icon">⏱️</div>
+                        <div class="metric-label">Avg Latency</div>
+                        <div class="metric-value" id="metric-latency">-- ms</div>
+                        <div class="metric-subtext">Mean response time</div>
+                    </div>
+
+                    <!-- Tokens per Second -->
+                    <div class="metric-card">
+                        <div class="metric-icon">📝</div>
+                        <div class="metric-label">Token Throughput</div>
+                        <div class="metric-value" id="metric-tokens-per-sec">-- tok/s</div>
+                        <div class="metric-subtext">Output tokens per second</div>
+                    </div>
+
+                    <!-- P50 Latency -->
+                    <div class="metric-card">
+                        <div class="metric-icon">📊</div>
+                        <div class="metric-label">P50 Latency</div>
+                        <div class="metric-value" id="metric-p50">-- ms</div>
+                        <div class="metric-subtext">50th percentile</div>
+                    </div>
+
+                    <!-- P95 Latency -->
+                    <div class="metric-card">
+                        <div class="metric-icon">📈</div>
+                        <div class="metric-label">P95 Latency</div>
+                        <div class="metric-value" id="metric-p95">-- ms</div>
+                        <div class="metric-subtext">95th percentile</div>
+                    </div>
+
+                    <!-- P99 Latency -->
+                    <div class="metric-card">
+                        <div class="metric-icon">⚡</div>
+                        <div class="metric-label">P99 Latency</div>
+                        <div class="metric-value" id="metric-p99">-- ms</div>
+                        <div class="metric-subtext">99th percentile</div>
+                    </div>
+
+                    <!-- Total Tokens -->
+                    <div class="metric-card">
+                        <div class="metric-icon">💬</div>
+                        <div class="metric-label">Total Tokens</div>
+                        <div class="metric-value" id="metric-total-tokens">--</div>
+                        <div class="metric-subtext">Input + Output tokens</div>
+                    </div>
+
+                    <!-- Success Rate -->
+                    <div class="metric-card">
+                        <div class="metric-icon">✅</div>
+                        <div class="metric-label">Success Rate</div>
+                        <div class="metric-value" id="metric-success-rate">-- %</div>
+                        <div class="metric-subtext">Successful requests</div>
+                    </div>
+                </div>
+
+                <!-- Benchmark Progress -->
+                <div id="benchmark-progress" class="benchmark-progress" style="display: none;">
+                    <div class="progress-bar">
+                        <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
+                    </div>
+                    <div class="progress-text">
+                        <span id="progress-status">Running benchmark...</span>
+                        <span id="progress-percent">0%</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
+
