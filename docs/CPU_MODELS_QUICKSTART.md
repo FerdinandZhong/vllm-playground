@@ -178,7 +178,7 @@ For similar prompts:
 export HF_TOKEN="hf_your_token_here"
 
 # 2. Start WebUI
-cd /path/to/vllm-webui
+cd /path/to/vllm-playground
 python run.py
 
 # 3. Open browser

@@ -1,4 +1,4 @@
-# Accessing Gated Models in vLLM WebUI
+# Accessing Gated Models in vLLM Playground
 
 ## What are Gated Models?
 
@@ -57,7 +57,7 @@ The WebUI includes these excellent CPU-optimized models:
 
 1. Go to https://huggingface.co/settings/tokens
 2. Click "New token"
-3. Give it a name (e.g., "vLLM WebUI")
+3. Give it a name (e.g., "vLLM Playground")
 4. Select token type:
    - **Read**: Sufficient for downloading models
    - **Write**: Not needed for vLLM

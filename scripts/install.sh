@@ -1,10 +1,10 @@
 #!/bin/bash
-# Installation script for vLLM WebUI
+# Installation script for vLLM Playground
 
 set -e  # Exit on error
 
 echo "╔════════════════════════════════════════════════════════════════╗"
-echo "║           vLLM WebUI Installation Script                       ║"
+echo "║           vLLM Playground Installation Script                       ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
 echo ""
 

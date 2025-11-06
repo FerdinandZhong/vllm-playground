@@ -1,4 +1,4 @@
-# Troubleshooting Guide for vLLM WebUI
+# Troubleshooting Guide for vLLM Playground
 
 ## Common Issues and Solutions
 

@@ -4,7 +4,7 @@
 
 Different language models are trained with different chat formats (called "chat templates"). Using the correct chat template for your model can significantly improve response quality.
 
-As of **November 4, 2025**, the vLLM WebUI now **automatically detects your model** and applies the appropriate chat template!
+As of **November 4, 2025**, the vLLM Playground now **automatically detects your model** and applies the appropriate chat template!
 
 ## Why Chat Templates Matter
 

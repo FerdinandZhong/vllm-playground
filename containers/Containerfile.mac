@@ -1,4 +1,4 @@
-# vLLM WebUI Container for macOS (CPU-only)
+# vLLM Playground Container for macOS (CPU-only)
 # Based on Fedora Minimal (100% free, Red Hat family, ~50% smaller than standard Fedora)
 # Python 3.12 built from source
 
@@ -50,12 +50,12 @@ RUN python3 -m venv vllm_env && \
     export VLLM_BUILD_WITH_CUDA=0 && \
     pip install --no-cache-dir -e .
 
-# Copy the vLLM WebUI project files
-COPY --chown=1001:1001 . ${HOME}/vllm-webui/
+# Copy the vLLM Playground project files
+COPY --chown=1001:1001 . ${HOME}/vllm-playground/
 
 # Install WebUI dependencies
 RUN source vllm_env/bin/activate && \
-    cd vllm-webui && \
+    cd vllm-playground && \
     pip install --no-cache-dir -r requirements.txt
 
 # Expose ports
@@ -64,12 +64,12 @@ RUN source vllm_env/bin/activate && \
 EXPOSE 7860 8000
 
 # Set the working directory to the WebUI
-WORKDIR ${HOME}/vllm-webui
+WORKDIR ${HOME}/vllm-playground
 
 # Create a startup script
 RUN echo '#!/bin/bash' > ${HOME}/start.sh && \
     echo 'source ${HOME}/vllm_env/bin/activate' >> ${HOME}/start.sh && \
-    echo 'cd ${HOME}/vllm-webui' >> ${HOME}/start.sh && \
+    echo 'cd ${HOME}/vllm-playground' >> ${HOME}/start.sh && \
     echo 'exec python3 run.py' >> ${HOME}/start.sh && \
     chmod +x ${HOME}/start.sh
 

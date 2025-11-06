@@ -1,11 +1,11 @@
 # Deployment Configurations
 
-This directory contains deployment configurations and scripts for running vLLM WebUI on Kubernetes and OpenShift.
+This directory contains deployment configurations and scripts for running vLLM Playground on Kubernetes and OpenShift.
 
 ## Available Deployments
 
 ### ☸️ kubernetes-deployment.yaml
-Standard Kubernetes deployment manifest for vLLM WebUI.
+Standard Kubernetes deployment manifest for vLLM Playground.
 
 **Features:**
 - Deployment with GPU support
@@ -67,14 +67,14 @@ Automated deployment script for OpenShift with interactive setup.
    kubectl apply -f deployments/kubernetes-deployment.yaml
    
    # Check status
-   kubectl get pods -l app=vllm-webui
-   kubectl get svc vllm-webui
+   kubectl get pods -l app=vllm-playground
+   kubectl get svc vllm-playground
    ```
 
 3. **Access:**
    ```bash
    # Port forward to access locally
-   kubectl port-forward svc/vllm-webui 7860:7860
+   kubectl port-forward svc/vllm-playground 7860:7860
    
    # Open http://localhost:7860
    ```
@@ -97,19 +97,19 @@ Automated deployment script for OpenShift with interactive setup.
 #### Option 2: Manual Deployment
 ```bash
 # Create a new project
-oc new-project vllm-webui
+oc new-project vllm-playground
 
 # Apply the deployment
 oc apply -f deployments/openshift-deployment.yaml
 
 # Check the build
-oc logs -f bc/vllm-webui
+oc logs -f bc/vllm-playground
 
 # Check the deployment
-oc get pods -l app=vllm-webui
+oc get pods -l app=vllm-playground
 
 # Get the route URL
-oc get route vllm-webui
+oc get route vllm-playground
 ```
 
 ## GPU Support
@@ -170,24 +170,24 @@ resources:
 ### Kubernetes
 ```bash
 # Port forward
-kubectl port-forward svc/vllm-webui 7860:7860
+kubectl port-forward svc/vllm-playground 7860:7860
 
 # Or create an Ingress (if you have an Ingress controller)
 kubectl apply -f - <<EOF
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: vllm-webui
+  name: vllm-playground
 spec:
   rules:
-  - host: vllm-webui.example.com
+  - host: vllm-playground.example.com
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: vllm-webui
+            name: vllm-playground
             port:
               number: 7860
 EOF
@@ -196,7 +196,7 @@ EOF
 ### OpenShift
 ```bash
 # Get the route URL
-oc get route vllm-webui -o jsonpath='{.spec.host}'
+oc get route vllm-playground -o jsonpath='{.spec.host}'
 
 # Access via browser
 # OpenShift automatically creates a route with TLS
@@ -207,10 +207,10 @@ oc get route vllm-webui -o jsonpath='{.spec.host}'
 ### Pod Won't Start
 ```bash
 # Check pod events
-kubectl describe pod -l app=vllm-webui
+kubectl describe pod -l app=vllm-playground
 
 # Check logs
-kubectl logs -l app=vllm-webui --tail=100
+kubectl logs -l app=vllm-playground --tail=100
 ```
 
 ### GPU Not Detected
@@ -225,22 +225,22 @@ kubectl get nodes --show-labels | grep gpu
 ### Build Fails (OpenShift)
 ```bash
 # Check build logs
-oc logs -f bc/vllm-webui
+oc logs -f bc/vllm-playground
 
 # Retry build
-oc start-build vllm-webui
+oc start-build vllm-playground
 ```
 
 ### Can't Access WebUI
 ```bash
 # Check service
-kubectl get svc vllm-webui
+kubectl get svc vllm-playground
 
 # Check endpoints
-kubectl get endpoints vllm-webui
+kubectl get endpoints vllm-playground
 
 # Test internal connectivity
-kubectl run -it --rm debug --image=curlimages/curl --restart=Never -- curl http://vllm-webui:7860
+kubectl run -it --rm debug --image=curlimages/curl --restart=Never -- curl http://vllm-playground:7860
 ```
 
 ## Security Considerations
@@ -261,7 +261,7 @@ Add monitoring labels to integrate with Prometheus:
 ```yaml
 metadata:
   labels:
-    app: vllm-webui
+    app: vllm-playground
     prometheus.io/scrape: "true"
     prometheus.io/port: "7860"
 ```

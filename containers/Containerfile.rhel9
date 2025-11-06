@@ -1,4 +1,4 @@
-# vLLM WebUI Container for RHEL 9 x86_64 (CPU-only)
+# vLLM Playground Container for RHEL 9 x86_64 (CPU-only)
 # Based on Red Hat Universal Base Image 9 Minimal (100% free, official RHEL-based image)
 # Optimized for x86_64 architecture with CPU inference
 
@@ -51,12 +51,12 @@ RUN python3 -m venv vllm_env && \
     export VLLM_BUILD_WITH_CUDA=0 && \
     pip install --no-cache-dir -e .
 
-# Copy the vLLM WebUI project files
-COPY . /home/vllm/vllm-webui/
+# Copy the vLLM Playground project files
+COPY . /home/vllm/vllm-playground/
 
 # Install WebUI dependencies
 RUN source vllm_env/bin/activate && \
-    cd vllm-webui && \
+    cd vllm-playground && \
     pip install --no-cache-dir -r requirements.txt
 
 # Set ownership of all files to vllm user
@@ -68,12 +68,12 @@ RUN chown -R 1001:1001 /home/vllm
 EXPOSE 7860 8000
 
 # Set the working directory to the WebUI
-WORKDIR /home/vllm/vllm-webui
+WORKDIR /home/vllm/vllm-playground
 
 # Create a startup script
 RUN echo '#!/bin/bash' > /home/vllm/start.sh && \
     echo 'source /home/vllm/vllm_env/bin/activate' >> /home/vllm/start.sh && \
-    echo 'cd /home/vllm/vllm-webui' >> /home/vllm/start.sh && \
+    echo 'cd /home/vllm/vllm-playground' >> /home/vllm/start.sh && \
     echo 'exec python3 run.py' >> /home/vllm/start.sh && \
     chmod +x /home/vllm/start.sh
 

@@ -1,4 +1,4 @@
-# vLLM WebUI - Quick Reference Guide
+# vLLM Playground - Quick Reference Guide
 
 ## 🚀 Quick Start
 

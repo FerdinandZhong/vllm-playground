@@ -2,7 +2,7 @@
 
 ## Overview
 
-The vLLM WebUI now includes a built-in performance benchmarking tool that measures key metrics of your vLLM server. This feature uses a custom load testing implementation to provide comprehensive performance insights.
+The vLLM Playground now includes a built-in performance benchmarking tool that measures key metrics of your vLLM server. This feature uses a custom load testing implementation to provide comprehensive performance insights.
 
 ## Location
 

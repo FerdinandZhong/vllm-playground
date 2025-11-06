@@ -202,7 +202,7 @@ For production workloads, consider:
 
 ```bash
 # 1. Navigate to project directory
-cd /Users/micyang/vllm-webui
+cd /Users/micyang/vllm-playground
 
 # 2. Start vLLM server (Terminal 1)
 ./run_cpu.sh facebook/opt-125m 8000

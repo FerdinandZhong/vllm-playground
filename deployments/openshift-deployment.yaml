@@ -1,6 +1,6 @@
 ---
-# vLLM WebUI OpenShift/Kubernetes Deployment
-# Image: quay.io/rh_ee_micyang/vllm-webui-cuda:0.1
+# vLLM Playground OpenShift/Kubernetes Deployment
+# Image: quay.io/rh_ee_micyang/vllm-playground-cuda:0.1
 # 
 # Quick Deploy:
 #   oc apply -f openshift-deployment.yaml
@@ -14,10 +14,10 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: vllm-webui
+  name: vllm-playground
   labels:
-    name: vllm-webui
-    app: vllm-webui
+    name: vllm-playground
+    app: vllm-playground
 
 ---
 # Optional: Secret for HuggingFace Token (for gated models like Llama, Gemma)
@@ -28,7 +28,7 @@ metadata:
 # kind: Secret
 # metadata:
 #   name: hf-token
-#   namespace: vllm-webui
+#   namespace: vllm-playground
 # type: Opaque
 # stringData:
 #   HF_TOKEN: "hf_your_token_here"
@@ -38,11 +38,11 @@ metadata:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vllm-webui
-  namespace: vllm-webui
+  name: vllm-playground
+  namespace: vllm-playground
   labels:
-    app: vllm-webui
-    app.kubernetes.io/name: vllm-webui
+    app: vllm-playground
+    app.kubernetes.io/name: vllm-playground
     app.kubernetes.io/component: webui
     app.kubernetes.io/version: "0.1"
 spec:
@@ -54,12 +54,12 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      app: vllm-webui
+      app: vllm-playground
   template:
     metadata:
       labels:
-        app: vllm-webui
-        app.kubernetes.io/name: vllm-webui
+        app: vllm-playground
+        app.kubernetes.io/name: vllm-playground
       annotations:
         # Force pod restart on config change
         checksum/config: "1"
@@ -73,8 +73,8 @@ spec:
           type: RuntimeDefault
       
       containers:
-      - name: vllm-webui
-        image: quay.io/rh_ee_micyang/vllm-webui-cuda:0.1
+      - name: vllm-playground
+        image: quay.io/rh_ee_micyang/vllm-playground-cuda:0.1
         imagePullPolicy: Always
         
         # Ports
@@ -102,6 +102,13 @@ spec:
           value: "compute,utility"
         - name: PYTHONUNBUFFERED
           value: "1"
+        # HuggingFace cache directory - use writable mounted volume
+        - name: HF_HOME
+          value: "/home/vllm/.cache/huggingface"
+        - name: TRANSFORMERS_CACHE
+          value: "/home/vllm/.cache/huggingface/transformers"
+        - name: HF_HUB_CACHE
+          value: "/home/vllm/.cache/huggingface/hub"
         
         # Uncomment to use HuggingFace token from secret
         # - name: HF_TOKEN
@@ -164,16 +171,16 @@ spec:
             drop:
             - ALL
         
-        # Optional: Volume Mounts for persistent model cache
-        # volumeMounts:
-        # - name: model-cache
-        #   mountPath: /home/vllm/.cache
+        # Volume Mounts for persistent model cache
+        volumeMounts:
+        - name: model-cache
+          mountPath: /home/vllm/.cache
       
-      # Optional: Volumes for persistent model cache
-      # volumes:
-      # - name: model-cache
-      #   persistentVolumeClaim:
-      #     claimName: vllm-model-cache
+      # Volumes for persistent model cache
+      volumes:
+      - name: model-cache
+        persistentVolumeClaim:
+          claimName: vllm-model-cache
       
       restartPolicy: Always
       
@@ -192,10 +199,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: vllm-webui-webui
-  namespace: vllm-webui
+  name: vllm-playground-webui
+  namespace: vllm-playground
   labels:
-    app: vllm-webui
+    app: vllm-playground
     service: webui
 spec:
   type: ClusterIP
@@ -205,7 +212,7 @@ spec:
     targetPort: 7860
     protocol: TCP
   selector:
-    app: vllm-webui
+    app: vllm-playground
   sessionAffinity: None
 
 ---
@@ -213,10 +220,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: vllm-webui-api
-  namespace: vllm-webui
+  name: vllm-playground-api
+  namespace: vllm-playground
   labels:
-    app: vllm-webui
+    app: vllm-playground
     service: api
 spec:
   type: ClusterIP
@@ -226,7 +233,7 @@ spec:
     targetPort: 8000
     protocol: TCP
   selector:
-    app: vllm-webui
+    app: vllm-playground
   sessionAffinity: None
 
 ---
@@ -234,16 +241,16 @@ spec:
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
-  name: vllm-webui-webui
-  namespace: vllm-webui
+  name: vllm-playground-webui
+  namespace: vllm-playground
   labels:
-    app: vllm-webui
+    app: vllm-playground
   annotations:
     haproxy.router.openshift.io/timeout: 5m
 spec:
   to:
     kind: Service
-    name: vllm-webui-webui
+    name: vllm-playground-webui
     weight: 100
   port:
     targetPort: webui
@@ -257,16 +264,16 @@ spec:
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
-  name: vllm-webui-api
-  namespace: vllm-webui
+  name: vllm-playground-api
+  namespace: vllm-playground
   labels:
-    app: vllm-webui
+    app: vllm-playground
   annotations:
     haproxy.router.openshift.io/timeout: 5m
 spec:
   to:
     kind: Service
-    name: vllm-webui-api
+    name: vllm-playground-api
     weight: 100
   port:
     targetPort: vllm-api
@@ -276,24 +283,22 @@ spec:
   wildcardPolicy: None
 
 ---
-# Optional: PersistentVolumeClaim for model cache
-# Uncomment to enable persistent model storage
-#
-# apiVersion: v1
-# kind: PersistentVolumeClaim
-# metadata:
-#   name: vllm-model-cache
-#   namespace: vllm-webui
-#   labels:
-#     app: vllm-webui
-# spec:
-#   accessModes:
-#   - ReadWriteOnce
-#   resources:
-#     requests:
-#       storage: 100Gi
-#   # Optional: specify storage class
-#   # storageClassName: fast-ssd
+# PersistentVolumeClaim for model cache
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vllm-model-cache
+  namespace: vllm-playground
+  labels:
+    app: vllm-playground
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  # Optional: specify storage class
+  # storageClassName: fast-ssd
 
 ---
 # Optional: HorizontalPodAutoscaler
@@ -302,13 +307,13 @@ spec:
 # apiVersion: autoscaling/v2
 # kind: HorizontalPodAutoscaler
 # metadata:
-#   name: vllm-webui-hpa
-#   namespace: vllm-webui
+#   name: vllm-playground-hpa
+#   namespace: vllm-playground
 # spec:
 #   scaleTargetRef:
 #     apiVersion: apps/v1
 #     kind: Deployment
-#     name: vllm-webui
+#     name: vllm-playground
 #   minReplicas: 1
 #   maxReplicas: 3
 #   metrics:
@@ -332,12 +337,12 @@ spec:
 # apiVersion: networking.k8s.io/v1
 # kind: NetworkPolicy
 # metadata:
-#   name: vllm-webui-netpol
-#   namespace: vllm-webui
+#   name: vllm-playground-netpol
+#   namespace: vllm-playground
 # spec:
 #   podSelector:
 #     matchLabels:
-#       app: vllm-webui
+#       app: vllm-playground
 #   policyTypes:
 #   - Ingress
 #   - Egress

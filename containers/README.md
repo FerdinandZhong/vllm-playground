@@ -11,7 +11,7 @@ This directory contains various Containerfile definitions for different deployme
 - **Platform**: Linux x86_64 with CUDA
 
 ```bash
-podman build -f containers/Containerfile.vllm -t vllm-webui:vllm .
+podman build -f containers/Containerfile.vllm -t vllm-playground:vllm .
 ```
 
 ### 🔥 Containerfile.cuda
@@ -21,7 +21,7 @@ podman build -f containers/Containerfile.vllm -t vllm-webui:vllm .
 - **Platform**: RHEL 9 x86_64 with CUDA
 
 ```bash
-podman build -f containers/Containerfile.cuda -t vllm-webui:cuda .
+podman build -f containers/Containerfile.cuda -t vllm-playground:cuda .
 ```
 
 ### 🍎 Containerfile.mac
@@ -31,7 +31,7 @@ podman build -f containers/Containerfile.cuda -t vllm-webui:cuda .
 - **Platform**: macOS (ARM64/x86_64)
 
 ```bash
-podman build -f containers/Containerfile.mac -t vllm-webui:mac .
+podman build -f containers/Containerfile.mac -t vllm-playground:mac .
 ```
 
 ### 🏢 Containerfile.rhel9
@@ -41,7 +41,7 @@ podman build -f containers/Containerfile.mac -t vllm-webui:mac .
 - **Platform**: RHEL 9 x86_64
 
 ```bash
-podman build -f containers/Containerfile.rhel9 -t vllm-webui:rhel9 .
+podman build -f containers/Containerfile.rhel9 -t vllm-playground:rhel9 .
 ```
 
 ## Quick Start
@@ -49,19 +49,19 @@ podman build -f containers/Containerfile.rhel9 -t vllm-webui:rhel9 .
 ### GPU Deployment (Recommended)
 ```bash
 # Using official vLLM image
-podman build -f containers/Containerfile.vllm -t vllm-webui:latest .
-podman run -d --name vllm-webui \
+podman build -f containers/Containerfile.vllm -t vllm-playground:latest .
+podman run -d --name vllm-playground \
   --device nvidia.com/gpu=all \
   -p 7860:7860 -p 8000:8000 \
-  vllm-webui:latest
+  vllm-playground:latest
 ```
 
 ### CPU Deployment (macOS)
 ```bash
-podman build -f containers/Containerfile.mac -t vllm-webui:mac .
-podman run -d --name vllm-webui \
+podman build -f containers/Containerfile.mac -t vllm-playground:mac .
+podman run -d --name vllm-playground \
   -p 7860:7860 -p 8000:8000 \
-  vllm-webui:mac
+  vllm-playground:mac
 ```
 
 ## Image Comparison

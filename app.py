@@ -1,5 +1,5 @@
 """
-vLLM WebUI - A web interface for managing and interacting with vLLM
+vLLM Playground - A web interface for managing and interacting with vLLM
 """
 import asyncio
 import logging
@@ -23,7 +23,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="vLLM WebUI", version="1.0.0")
+app = FastAPI(title="vLLM Playground", version="1.0.0")
 
 # Get base directory
 BASE_DIR = Path(__file__).parent
@@ -1003,7 +1003,7 @@ async def run_benchmark(config: BenchmarkConfig, server_config: VLLMConfig):
 
 def main():
     """Main entry point"""
-    logger.info("Starting vLLM WebUI...")
+    logger.info("Starting vLLM Playground...")
     
     # Get port from environment or use default
     webui_port = int(os.environ.get("WEBUI_PORT", "7860"))

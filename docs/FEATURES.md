@@ -1,4 +1,4 @@
-# 🎯 vLLM WebUI - Feature Overview
+# 🎯 vLLM Playground - Feature Overview
 
 ## ✨ What You Get
 

@@ -1,15 +1,15 @@
 #!/bin/bash
 #
-# OpenShift Deployment Script for vLLM WebUI
-# This script deploys the vLLM WebUI container with GPU support to OpenShift
+# OpenShift Deployment Script for vLLM Playground
+# This script deploys the vLLM Playground container with GPU support to OpenShift
 #
 
 set -e
 
 # Configuration
-IMAGE="quay.io/rh_ee_micyang/vllm-webui-cuda:0.1"
-APP_NAME="vllm-webui"
-NAMESPACE="${OPENSHIFT_NAMESPACE:-vllm-webui}"
+IMAGE="quay.io/rh_ee_micyang/vllm-playground-cuda:0.1"
+APP_NAME="vllm-playground"
+NAMESPACE="${OPENSHIFT_NAMESPACE:-vllm-playground}"
 DEPLOYMENT_YAML="openshift-deployment.yaml"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -57,15 +57,15 @@ check_login() {
 
 # Deploy using YAML file
 deploy_resources() {
-    log_info "Deploying vLLM WebUI using ${DEPLOYMENT_YAML}..."
+    log_info "Deploying vLLM Playground using ${DEPLOYMENT_YAML}..."
     
     # If custom namespace is specified, apply to that namespace
-    if [ "${NAMESPACE}" != "vllm-webui" ]; then
+    if [ "${NAMESPACE}" != "vllm-playground" ]; then
         log_info "Deploying to custom namespace: ${NAMESPACE}"
-        log_warn "Note: You may need to edit ${DEPLOYMENT_YAML} to change the namespace from 'vllm-webui' to '${NAMESPACE}'"
+        log_warn "Note: You may need to edit ${DEPLOYMENT_YAML} to change the namespace from 'vllm-playground' to '${NAMESPACE}'"
         oc apply -f "${SCRIPT_DIR}/${DEPLOYMENT_YAML}" -n "${NAMESPACE}"
     else
-        log_info "Deploying to default namespace: vllm-webui"
+        log_info "Deploying to default namespace: vllm-playground"
         oc apply -f "${SCRIPT_DIR}/${DEPLOYMENT_YAML}"
     fi
     
@@ -97,7 +97,7 @@ show_info() {
     log_info "Deployment completed successfully!"
     echo ""
     echo "========================================"
-    echo "  vLLM WebUI Deployment Information"
+    echo "  vLLM Playground Deployment Information"
     echo "========================================"
     echo ""
     echo "Namespace: ${NAMESPACE}"
@@ -164,7 +164,7 @@ create_hf_token_prompt() {
 
 # Main execution
 main() {
-    log_info "Starting OpenShift deployment for vLLM WebUI..."
+    log_info "Starting OpenShift deployment for vLLM Playground..."
     echo ""
     
     check_yaml_file

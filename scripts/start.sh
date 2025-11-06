@@ -1,7 +1,7 @@
 #!/bin/bash
-# Quick start script for vLLM WebUI
+# Quick start script for vLLM Playground
 
-echo "🚀 Starting vLLM WebUI..."
+echo "🚀 Starting vLLM Playground..."
 echo ""
 
 # Check if Python is available

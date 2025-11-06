@@ -1,4 +1,4 @@
-// vLLM WebUI - Main JavaScript
+// vLLM Playground - Main JavaScript
 class VLLMWebUI {
     constructor() {
         this.ws = null;

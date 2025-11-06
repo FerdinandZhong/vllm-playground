@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-vLLM WebUI - Setup Verification Script
+vLLM Playground - Setup Verification Script
 Checks if everything is properly configured
 """
 import sys
@@ -89,7 +89,7 @@ def check_files():
     return all_exist
 
 def main():
-    print_header("🔍 vLLM WebUI Setup Verification")
+    print_header("🔍 vLLM Playground Setup Verification")
     
     results = []
     

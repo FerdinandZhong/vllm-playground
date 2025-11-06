@@ -1,6 +1,6 @@
 ---
-# vLLM WebUI Kubernetes Deployment
-# Image: quay.io/rh_ee_micyang/vllm-webui-cuda:0.1
+# vLLM Playground Kubernetes Deployment
+# Image: quay.io/rh_ee_micyang/vllm-playground-cuda:0.1
 # 
 # Quick Deploy:
 #   kubectl apply -f kubernetes-deployment.yaml
@@ -14,10 +14,10 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: vllm-webui
+  name: vllm-playground
   labels:
-    name: vllm-webui
-    app: vllm-webui
+    name: vllm-playground
+    app: vllm-playground
 
 ---
 # Optional: Secret for HuggingFace Token (for gated models like Llama, Gemma)
@@ -28,7 +28,7 @@ metadata:
 # kind: Secret
 # metadata:
 #   name: hf-token
-#   namespace: vllm-webui
+#   namespace: vllm-playground
 # type: Opaque
 # stringData:
 #   HF_TOKEN: "hf_your_token_here"
@@ -38,11 +38,11 @@ metadata:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vllm-webui
-  namespace: vllm-webui
+  name: vllm-playground
+  namespace: vllm-playground
   labels:
-    app: vllm-webui
-    app.kubernetes.io/name: vllm-webui
+    app: vllm-playground
+    app.kubernetes.io/name: vllm-playground
     app.kubernetes.io/component: webui
     app.kubernetes.io/version: "0.1"
 spec:
@@ -54,12 +54,12 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      app: vllm-webui
+      app: vllm-playground
   template:
     metadata:
       labels:
-        app: vllm-webui
-        app.kubernetes.io/name: vllm-webui
+        app: vllm-playground
+        app.kubernetes.io/name: vllm-playground
       annotations:
         # Force pod restart on config change
         checksum/config: "1"
@@ -73,8 +73,8 @@ spec:
           type: RuntimeDefault
       
       containers:
-      - name: vllm-webui
-        image: quay.io/rh_ee_micyang/vllm-webui-cuda:0.1
+      - name: vllm-playground
+        image: quay.io/rh_ee_micyang/vllm-playground-cuda:0.1
         imagePullPolicy: Always
         
         # Ports
@@ -193,10 +193,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: vllm-webui-webui
-  namespace: vllm-webui
+  name: vllm-playground-webui
+  namespace: vllm-playground
   labels:
-    app: vllm-webui
+    app: vllm-playground
     service: webui
 spec:
   type: ClusterIP
@@ -206,7 +206,7 @@ spec:
     targetPort: 7860
     protocol: TCP
   selector:
-    app: vllm-webui
+    app: vllm-playground
   sessionAffinity: None
 
 ---
@@ -214,10 +214,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: vllm-webui-api
-  namespace: vllm-webui
+  name: vllm-playground-api
+  namespace: vllm-playground
   labels:
-    app: vllm-webui
+    app: vllm-playground
     service: api
 spec:
   type: ClusterIP
@@ -227,7 +227,7 @@ spec:
     targetPort: 8000
     protocol: TCP
   selector:
-    app: vllm-webui
+    app: vllm-playground
   sessionAffinity: None
 
 ---
@@ -237,10 +237,10 @@ spec:
 # apiVersion: networking.k8s.io/v1
 # kind: Ingress
 # metadata:
-#   name: vllm-webui-webui
-#   namespace: vllm-webui
+#   name: vllm-playground-webui
+#   namespace: vllm-playground
 #   labels:
-#     app: vllm-webui
+#     app: vllm-playground
 #   annotations:
 #     # For nginx ingress controller
 #     nginx.ingress.kubernetes.io/ssl-redirect: "true"
@@ -252,17 +252,17 @@ spec:
 #   ingressClassName: nginx
 #   tls:
 #   - hosts:
-#     - vllm-webui.example.com
-#     secretName: vllm-webui-tls
+#     - vllm-playground.example.com
+#     secretName: vllm-playground-tls
 #   rules:
-#   - host: vllm-webui.example.com
+#   - host: vllm-playground.example.com
 #     http:
 #       paths:
 #       - path: /
 #         pathType: Prefix
 #         backend:
 #           service:
-#             name: vllm-webui-webui
+#             name: vllm-playground-webui
 #             port:
 #               number: 7860
 
@@ -273,10 +273,10 @@ spec:
 # apiVersion: networking.k8s.io/v1
 # kind: Ingress
 # metadata:
-#   name: vllm-webui-api
-#   namespace: vllm-webui
+#   name: vllm-playground-api
+#   namespace: vllm-playground
 #   labels:
-#     app: vllm-webui
+#     app: vllm-playground
 #   annotations:
 #     # For nginx ingress controller
 #     nginx.ingress.kubernetes.io/ssl-redirect: "true"
@@ -298,7 +298,7 @@ spec:
 #         pathType: Prefix
 #         backend:
 #           service:
-#             name: vllm-webui-api
+#             name: vllm-playground-api
 #             port:
 #               number: 8000
 
@@ -310,9 +310,9 @@ spec:
 # kind: PersistentVolumeClaim
 # metadata:
 #   name: vllm-model-cache
-#   namespace: vllm-webui
+#   namespace: vllm-playground
 #   labels:
-#     app: vllm-webui
+#     app: vllm-playground
 # spec:
 #   accessModes:
 #   - ReadWriteOnce
@@ -329,13 +329,13 @@ spec:
 # apiVersion: autoscaling/v2
 # kind: HorizontalPodAutoscaler
 # metadata:
-#   name: vllm-webui-hpa
-#   namespace: vllm-webui
+#   name: vllm-playground-hpa
+#   namespace: vllm-playground
 # spec:
 #   scaleTargetRef:
 #     apiVersion: apps/v1
 #     kind: Deployment
-#     name: vllm-webui
+#     name: vllm-playground
 #   minReplicas: 1
 #   maxReplicas: 3
 #   metrics:
@@ -359,12 +359,12 @@ spec:
 # apiVersion: networking.k8s.io/v1
 # kind: NetworkPolicy
 # metadata:
-#   name: vllm-webui-netpol
-#   namespace: vllm-webui
+#   name: vllm-playground-netpol
+#   namespace: vllm-playground
 # spec:
 #   podSelector:
 #     matchLabels:
-#       app: vllm-webui
+#       app: vllm-playground
 #   policyTypes:
 #   - Ingress
 #   - Egress

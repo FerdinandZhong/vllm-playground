@@ -1,13 +1,13 @@
-# vLLM WebUI
+# vLLM Playground
 
 A modern web interface for managing and interacting with vLLM (Very Large Language Model) servers. Supports both GPU and CPU modes, with special optimizations for macOS Apple Silicon.
 
-![vLLM WebUI Interface](assets/vllm-webui.png)
+![vLLM Playground Interface](assets/vllm-playground.png)
 
 ## 📁 Project Structure
 
 ```
-vllm-webui/
+vllm-playground/
 ├── app.py                       # Main FastAPI backend application
 ├── run.py                       # Backend server launcher
 ├── index.html                   # Main HTML interface
@@ -44,7 +44,7 @@ vllm-webui/
 │   └── example_configs.json    # Example configurations
 │
 ├── assets/                      # Images and assets
-│   ├── vllm-webui.png          # WebUI screenshot
+│   ├── vllm-playground.png          # WebUI screenshot
 │   ├── vllm.png                # vLLM logo
 │   └── vllm.jpeg               # vLLM logo (alternate)
 │
