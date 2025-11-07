@@ -67,50 +67,148 @@ df -h /workspace
 
 ---
 
-## Quick Start
+## ⚠️ IMPORTANT: Making Installations Persistent
 
-### For CPU-Only Deployments
+**By default, pip installations with `--user` are NOT persistent across pod restarts!**
+
+### The Problem
+
+When you install packages with `pip3 install --user`, they go to `/home/vllm/.local/` which is ephemeral storage. If your pod restarts, you'll lose:
+- ❌ All pip packages (vLLM, PyTorch, FastAPI, etc.)
+- ❌ Running processes
+- ✅ BUT your models in `/workspace/.cache/huggingface/` are safe (persistent volume)
+
+### The Solution: Install to Persistent Storage
+
+To make your installations persist across pod restarts, install to `/workspace`:
 
 ```bash
-# 1. Upgrade pip
-pip3 install --upgrade pip setuptools wheel --user
+# Option 1: Install to workspace prefix (RECOMMENDED)
+pip3 install --prefix=/workspace/.local vllm torch torchvision -r /home/vllm/vllm-playground/requirements.txt
 
-# 2. Install PyTorch and vLLM (CPU version - fastest to install)
-pip3 install --user torch torchvision --index-url https://download.pytorch.org/whl/cpu
-pip3 install --user vllm-cpu-only
+# Option 2: Use a custom pip configuration
+mkdir -p /workspace/.pip
+cat > /workspace/.pip/pip.conf << 'EOF'
+[install]
+prefix=/workspace/.local
+EOF
+export PIP_CONFIG_FILE=/workspace/.pip/pip.conf
 
-# 3. Install WebUI dependencies
-pip3 install --user -r /home/vllm/vllm-playground/requirements.txt
+# Then install normally
+pip3 install vllm torch torchvision -r /home/vllm/vllm-playground/requirements.txt
+```
 
-# 4. Verify installation
+### Update Your Environment Variables
+
+Add these to your shell configuration (and deployment environment):
+
+```bash
+# Add to ~/.bashrc or your shell init file
+export PATH="/workspace/.local/bin:$PATH"
+export PYTHONPATH="/workspace/.local/lib/python3.11/site-packages:$PYTHONPATH"
+
+# For current session
+source ~/.bashrc
+# Or just export them directly
+```
+
+### Permanent Setup Script
+
+Create a persistent setup script:
+
+```bash
+cat > /workspace/setup_env.sh << 'EOF'
+#!/bin/bash
+# Source this file to set up persistent Python environment
+export PATH="/workspace/.local/bin:$PATH"
+export PYTHONPATH="/workspace/.local/lib/python3.11/site-packages:$PYTHONPATH"
+export PIP_CONFIG_FILE="/workspace/.pip/pip.conf"
+echo "✅ Environment configured for persistent installations"
+EOF
+
+chmod +x /workspace/setup_env.sh
+
+# Add to your .bashrc
+echo "source /workspace/setup_env.sh" >> ~/.bashrc
+```
+
+### Quick Verification
+
+Check where packages are installed:
+
+```bash
+# Check installation location
+pip3 show vllm | grep Location
+# Should show: /workspace/.local/lib/python3.11/site-packages
+
+# Verify it works after pod restart
+python3 -c "import vllm; print(f'✅ vLLM {vllm.__version__} from persistent storage')"
+```
+
+**Note:** If you've already installed packages to `/home/vllm/.local/`, you'll need to reinstall them to `/workspace/.local/` using the commands above.
+
+---
+
+## Quick Start
+
+### For CPU-Only Deployments (Persistent Installation)
+
+```bash
+# 1. Set up persistent environment
+export PATH="/workspace/.local/bin:$PATH"
+export PYTHONPATH="/workspace/.local/lib/python3.11/site-packages:$PYTHONPATH"
+
+# 2. Upgrade pip
+pip3 install --upgrade pip setuptools wheel --prefix=/workspace/.local
+
+# 3. Install PyTorch and vLLM (CPU version - fastest to install)
+pip3 install --prefix=/workspace/.local torch torchvision --index-url https://download.pytorch.org/whl/cpu
+pip3 install --prefix=/workspace/.local vllm-cpu-only
+
+# 4. Install WebUI dependencies
+pip3 install --prefix=/workspace/.local -r /home/vllm/vllm-playground/requirements.txt
+
+# 5. Verify installation
 python3 -c "import flask, vllm, torch; print('✅ All dependencies installed!')"
 
-# 5. Start the application
+# 6. Make environment persistent across sessions
+echo 'export PATH="/workspace/.local/bin:$PATH"' >> ~/.bashrc
+echo 'export PYTHONPATH="/workspace/.local/lib/python3.11/site-packages:$PYTHONPATH"' >> ~/.bashrc
+
+# 7. Start the application
 cd /home/vllm/vllm-playground && python3 app.py
 ```
 
-### For GPU Deployments
+### For GPU Deployments (Persistent Installation)
 
 ```bash
 # 1. Verify GPU access
 nvidia-smi
 
-# 2. Upgrade pip
-pip3 install --upgrade pip setuptools wheel --user
+# 2. Set up persistent environment
+export PATH="/workspace/.local/bin:$PATH"
+export PYTHONPATH="/workspace/.local/lib/python3.11/site-packages:$PYTHONPATH"
 
-# 3. Install PyTorch with CUDA support
-pip3 install --user torch torchvision --index-url https://download.pytorch.org/whl/cu121
+# 3. Upgrade pip
+pip3 install --upgrade pip setuptools wheel --prefix=/workspace/.local
 
-# 4. Install vLLM with GPU support
-pip3 install --user vllm
+# 4. Install PyTorch with CUDA support
+pip3 install --prefix=/workspace/.local torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
-# 5. Verify GPU is accessible to PyTorch
+# 5. Install vLLM with GPU support
+pip3 install --prefix=/workspace/.local vllm
+
+# 6. Verify GPU is accessible to PyTorch
 python3 -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}'); print(f'GPU: {torch.cuda.get_device_name(0)}')"
 
-# 6. Install WebUI dependencies
-pip3 install --user -r /home/vllm/vllm-playground/requirements.txt
+# 7. Install WebUI dependencies
+pip3 install --prefix=/workspace/.local -r /home/vllm/vllm-playground/requirements.txt
 
-# 7. Start the application
+# 8. Make environment persistent across sessions
+echo 'export PATH="/workspace/.local/bin:$PATH"' >> ~/.bashrc
+echo 'export PYTHONPATH="/workspace/.local/lib/python3.11/site-packages:$PYTHONPATH"' >> ~/.bashrc
+
+# 9. Start the application
 cd /home/vllm/vllm-playground && python3 app.py
 ```
 
@@ -139,12 +237,17 @@ vim --version
 
 ---
 
-### Step 2: Upgrade pip and Build Tools
+### Step 2: Set Up Persistent Environment and Upgrade pip
 
-Always start with the latest pip:
+Always start by setting up persistent environment variables and upgrading pip:
 
 ```bash
-pip3 install --upgrade pip setuptools wheel --user
+# Set up persistent environment (IMPORTANT!)
+export PATH="/workspace/.local/bin:$PATH"
+export PYTHONPATH="/workspace/.local/lib/python3.11/site-packages:$PYTHONPATH"
+
+# Upgrade pip to persistent location
+pip3 install --upgrade pip setuptools wheel --prefix=/workspace/.local
 ```
 
 **Expected output:**
@@ -156,6 +259,17 @@ Successfully installed pip-XX.X.X setuptools-XX.X.X wheel-X.X.X
 ```bash
 pip3 --version
 # Should show pip 24.x or newer
+
+# Verify persistent location
+pip3 show pip | grep Location
+# Should show: /workspace/.local/lib/python3.11/site-packages
+```
+
+**Make it permanent:**
+```bash
+# Add to .bashrc so it persists across sessions
+echo 'export PATH="/workspace/.local/bin:$PATH"' >> ~/.bashrc
+echo 'export PYTHONPATH="/workspace/.local/lib/python3.11/site-packages:$PYTHONPATH"' >> ~/.bashrc
 ```
 
 ---
@@ -169,11 +283,11 @@ Choose the installation method based on your hardware:
 #### Option A: CPU Only (Fastest to Install, Works Everywhere)
 
 ```bash
-# Install PyTorch CPU version
-pip3 install --user torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# Install PyTorch CPU version (to persistent storage)
+pip3 install --prefix=/workspace/.local torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
-# Install vLLM CPU-only version
-pip3 install --user vllm-cpu-only
+# Install vLLM CPU-only version (to persistent storage)
+pip3 install --prefix=/workspace/.local vllm-cpu-only
 ```
 
 **Pros:**
@@ -192,11 +306,11 @@ pip3 install --user vllm-cpu-only
 #### Option B: CUDA GPU (Best Performance)
 
 ```bash
-# Install PyTorch with CUDA 12.1 support
-pip3 install --user torch torchvision --index-url https://download.pytorch.org/whl/cu121
+# Install PyTorch with CUDA 12.1 support (to persistent storage)
+pip3 install --prefix=/workspace/.local torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
-# Install vLLM with CUDA support
-pip3 install --user vllm
+# Install vLLM with CUDA support (to persistent storage)
+pip3 install --prefix=/workspace/.local vllm
 ```
 
 **Requirements:**
@@ -226,11 +340,11 @@ nvidia-smi
 #### Option C: ROCm (AMD GPU)
 
 ```bash
-# Install PyTorch with ROCm 6.1 support
-pip3 install --user torch torchvision --index-url https://download.pytorch.org/whl/rocm6.1
+# Install PyTorch with ROCm 6.1 support (to persistent storage)
+pip3 install --prefix=/workspace/.local torch torchvision --index-url https://download.pytorch.org/whl/rocm6.1
 
-# Install vLLM with ROCm support
-pip3 install --user vllm
+# Install vLLM with ROCm support (to persistent storage)
+pip3 install --prefix=/workspace/.local vllm
 ```
 
 **Requirements:**
@@ -273,10 +387,10 @@ GPU: Tesla T4
 
 ### Step 5: Install WebUI Dependencies
 
-Now that vLLM is installed and working, install the WebUI dependencies:
+Now that vLLM is installed and working, install the WebUI dependencies to persistent storage:
 
 ```bash
-pip3 install --user -r /home/vllm/vllm-playground/requirements.txt
+pip3 install --prefix=/workspace/.local -r /home/vllm/vllm-playground/requirements.txt
 ```
 
 **This will install:**
@@ -298,10 +412,10 @@ python3 -c "import gradio; print(f'✅ Gradio version: {gradio.__version__}')"
 
 ### Step 6: Install llmcompressor (Optional)
 
-For model quantization and compression:
+For model quantization and compression (to persistent storage):
 
 ```bash
-pip3 install --user llmcompressor
+pip3 install --prefix=/workspace/.local llmcompressor
 ```
 
 **Use cases:**
@@ -318,21 +432,31 @@ pip3 install --user llmcompressor
 ### For CPU-Only Deployments
 
 ```bash
-# Complete installation script for CPU
-pip3 install --upgrade pip setuptools wheel --user
+# Complete installation script for CPU (with persistent storage)
+
+# Set up persistent environment
+export PATH="/workspace/.local/bin:$PATH"
+export PYTHONPATH="/workspace/.local/lib/python3.11/site-packages:$PYTHONPATH"
+
+# Upgrade pip
+pip3 install --upgrade pip setuptools wheel --prefix=/workspace/.local
 
 # Install vLLM first
-pip3 install --user torch torchvision --index-url https://download.pytorch.org/whl/cpu
-pip3 install --user vllm-cpu-only
+pip3 install --prefix=/workspace/.local torch torchvision --index-url https://download.pytorch.org/whl/cpu
+pip3 install --prefix=/workspace/.local vllm-cpu-only
 
 # Verify vLLM works
 python3 -c "import vllm, torch; print(f'PyTorch: {torch.__version__}'); print(f'vLLM: {vllm.__version__}'); print(f'Device: {torch.device(\"cpu\")}')"
 
 # Install WebUI dependencies
-pip3 install --user -r /home/vllm/vllm-playground/requirements.txt
+pip3 install --prefix=/workspace/.local -r /home/vllm/vllm-playground/requirements.txt
 
 # Verify all dependencies
 python3 -c "import flask, gradio; print('✅ All dependencies installed!')"
+
+# Make environment persistent
+echo 'export PATH="/workspace/.local/bin:$PATH"' >> ~/.bashrc
+echo 'export PYTHONPATH="/workspace/.local/lib/python3.11/site-packages:$PYTHONPATH"' >> ~/.bashrc
 ```
 
 ---
@@ -348,20 +472,29 @@ nvidia-smi
 
 If `nvidia-smi` fails, your pod doesn't have GPU access. Check your deployment configuration.
 
-**Step 2: Install vLLM with GPU Support**
+**Step 2: Install vLLM with GPU Support (Persistent Storage)**
 
 ```bash
-pip3 install --upgrade pip setuptools wheel --user
+# Set up persistent environment
+export PATH="/workspace/.local/bin:$PATH"
+export PYTHONPATH="/workspace/.local/lib/python3.11/site-packages:$PYTHONPATH"
+
+# Upgrade pip
+pip3 install --upgrade pip setuptools wheel --prefix=/workspace/.local
 
 # Install PyTorch with CUDA support
-pip3 install --user torch torchvision --index-url https://download.pytorch.org/whl/cu121
+pip3 install --prefix=/workspace/.local torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
 # Install vLLM
-pip3 install --user vllm
+pip3 install --prefix=/workspace/.local vllm
 
 # Verify GPU is accessible to PyTorch and vLLM
 python3 -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}'); print(f'GPU count: {torch.cuda.device_count()}'); print(f'GPU name: {torch.cuda.get_device_name(0)}')"
 python3 -c "import vllm; print(f'✅ vLLM version: {vllm.__version__}')"
+
+# Make environment persistent
+echo 'export PATH="/workspace/.local/bin:$PATH"' >> ~/.bashrc
+echo 'export PYTHONPATH="/workspace/.local/lib/python3.11/site-packages:$PYTHONPATH"' >> ~/.bashrc
 ```
 
 **Expected output:**
@@ -375,8 +508,8 @@ GPU name: Tesla T4
 **Step 3: Install WebUI Dependencies**
 
 ```bash
-# Now install the WebUI dependencies
-pip3 install --user -r /home/vllm/vllm-playground/requirements.txt
+# Now install the WebUI dependencies (to persistent storage)
+pip3 install --prefix=/workspace/.local -r /home/vllm/vllm-playground/requirements.txt
 
 # Verify all dependencies
 python3 -c "import flask, gradio; print('✅ All dependencies installed!')"
@@ -479,6 +612,137 @@ vllm serve facebook/opt-125m --host 0.0.0.0 --port 8000
 **Access the API:**
 ```bash
 curl http://localhost:8000/v1/models
+```
+
+---
+
+## Migrating from Non-Persistent to Persistent Installation
+
+If you've already installed packages using `--user` flag (to `/home/vllm/.local/`), you'll need to reinstall them to persistent storage:
+
+### Step 1: Check Current Installation Location
+
+```bash
+# Check where vLLM is installed
+pip3 show vllm | grep Location
+
+# If it shows: /home/vllm/.local/lib/python3.11/site-packages
+# Then you need to migrate to persistent storage
+```
+
+### Step 2: List Currently Installed Packages
+
+```bash
+# Save list of installed packages
+pip3 freeze > /workspace/installed_packages.txt
+
+# Review what you have
+cat /workspace/installed_packages.txt
+```
+
+### Step 3: Reinstall to Persistent Storage
+
+```bash
+# Set up environment
+export PATH="/workspace/.local/bin:$PATH"
+export PYTHONPATH="/workspace/.local/lib/python3.11/site-packages:$PYTHONPATH"
+
+# Reinstall everything to workspace
+pip3 install --prefix=/workspace/.local -r /workspace/installed_packages.txt
+
+# Or reinstall specific packages
+pip3 install --prefix=/workspace/.local vllm torch torchvision -r /home/vllm/vllm-playground/requirements.txt
+```
+
+### Step 4: Verify Migration
+
+```bash
+# Check new location
+pip3 show vllm | grep Location
+# Should now show: /workspace/.local/lib/python3.11/site-packages
+
+# Test imports
+python3 -c "import vllm, torch; print('✅ Migration successful')"
+```
+
+### Step 5: Clean Up Old Installation (Optional)
+
+```bash
+# After verifying everything works, you can remove the old installation
+rm -rf /home/vllm/.local
+```
+
+---
+
+## Finding Running Processes in Minimal Containers
+
+If you've started your app and lost track of the process, here are methods that work in minimal containers:
+
+### Method 1: Using /proc Filesystem
+
+```bash
+# Find Python processes
+for pid in /proc/[0-9]*; do
+  if [ -f "$pid/cmdline" ]; then
+    cmdline=$(cat "$pid/cmdline" 2>/dev/null | tr '\0' ' ')
+    if echo "$cmdline" | grep -q "python\|app.py\|uvicorn"; then
+      echo "PID: $(basename $pid)"
+      echo "Command: $cmdline"
+      echo "---"
+    fi
+  fi
+done
+```
+
+### Method 2: Check Specific Ports
+
+```bash
+# Check what's listening on port 7860 (WebUI)
+grep -l ":1EB4" /proc/[0-9]*/net/tcp 2>/dev/null | while read f; do
+  pid=$(echo $f | cut -d/ -f3)
+  echo "Process on port 7860: PID $pid"
+  cat /proc/$pid/cmdline | tr '\0' ' '
+  echo
+done
+
+# Note: 1EB4 is hexadecimal for 7860
+# For port 8000 (vLLM API), use: 1F40
+```
+
+### Method 3: Simple Grep Process List
+
+If you have basic `ps` command:
+
+```bash
+# Try this first
+ps aux 2>/dev/null | grep python
+
+# Or if ps aux doesn't work
+ps -ef 2>/dev/null | grep python
+```
+
+### Killing a Process Without Full Tools
+
+```bash
+# Once you have the PID
+kill <PID>
+
+# If that doesn't work, force kill
+kill -9 <PID>
+
+# Verify it's gone
+ls -la /proc/<PID> 2>/dev/null || echo "Process terminated"
+```
+
+### Viewing Process Logs
+
+```bash
+# View stdout/stderr of a running process
+tail -f /proc/<PID>/fd/1  # stdout
+tail -f /proc/<PID>/fd/2  # stderr
+
+# View working directory
+ls -l /proc/<PID>/cwd
 ```
 
 ---
@@ -703,47 +967,60 @@ EOF
 
 ## Summary of Installation Commands
 
-### Minimal CPU Installation (Fastest)
+### Minimal CPU Installation (Fastest) - WITH PERSISTENT STORAGE
 
 ```bash
+# Set up persistent environment
+export PATH="/workspace/.local/bin:$PATH"
+export PYTHONPATH="/workspace/.local/lib/python3.11/site-packages:$PYTHONPATH"
+
 # Upgrade pip
-pip3 install --upgrade pip setuptools wheel --user
+pip3 install --upgrade pip setuptools wheel --prefix=/workspace/.local
 
 # Install vLLM first
-pip3 install --user torch torchvision --index-url https://download.pytorch.org/whl/cpu
-pip3 install --user vllm-cpu-only
+pip3 install --prefix=/workspace/.local torch torchvision --index-url https://download.pytorch.org/whl/cpu
+pip3 install --prefix=/workspace/.local vllm-cpu-only
 
 # Verify vLLM
 python3 -c "import vllm; print('✅ vLLM installed')"
 
 # Install WebUI dependencies
-pip3 install --user -r /home/vllm/vllm-playground/requirements.txt
+pip3 install --prefix=/workspace/.local -r /home/vllm/vllm-playground/requirements.txt
+
+# Make environment persistent across pod restarts
+echo 'export PATH="/workspace/.local/bin:$PATH"' >> ~/.bashrc
+echo 'export PYTHONPATH="/workspace/.local/lib/python3.11/site-packages:$PYTHONPATH"' >> ~/.bashrc
 ```
 
-### Full GPU Installation
+### Full GPU Installation - WITH PERSISTENT STORAGE
 
 ```bash
-# Optional: Install build dependencies
-microdnf install -y gcc gcc-c++ python3.11-devel git
-
 # Verify GPU access
 nvidia-smi
 
+# Set up persistent environment
+export PATH="/workspace/.local/bin:$PATH"
+export PYTHONPATH="/workspace/.local/lib/python3.11/site-packages:$PYTHONPATH"
+
 # Upgrade pip
-pip3 install --upgrade pip setuptools wheel --user
+pip3 install --upgrade pip setuptools wheel --prefix=/workspace/.local
 
 # Install vLLM with GPU support first
-pip3 install --user torch torchvision --index-url https://download.pytorch.org/whl/cu121
-pip3 install --user vllm
+pip3 install --prefix=/workspace/.local torch torchvision --index-url https://download.pytorch.org/whl/cu121
+pip3 install --prefix=/workspace/.local vllm
 
 # Verify GPU is accessible
 python3 -c "import torch; print(f'CUDA: {torch.cuda.is_available()}')"
 
 # Install WebUI dependencies
-pip3 install --user -r /home/vllm/vllm-playground/requirements.txt
+pip3 install --prefix=/workspace/.local -r /home/vllm/vllm-playground/requirements.txt
 
 # Optional: Install llmcompressor
-pip3 install --user llmcompressor
+pip3 install --prefix=/workspace/.local llmcompressor
+
+# Make environment persistent across pod restarts
+echo 'export PATH="/workspace/.local/bin:$PATH"' >> ~/.bashrc
+echo 'export PYTHONPATH="/workspace/.local/lib/python3.11/site-packages:$PYTHONPATH"' >> ~/.bashrc
 ```
 
 ---
