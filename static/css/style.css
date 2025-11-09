@@ -202,7 +202,7 @@ body {
     width: 100%;
     cursor: row-resize;
     position: relative;
-    margin: 10px 0;
+    margin: 20px 0;
 }
 
 .resize-handle-horizontal:hover {
@@ -1348,11 +1348,13 @@ body {
     background: var(--bg-secondary);
     border-radius: 12px;
     padding: 0;
-    margin-bottom: 20px;
+    margin-bottom: 40px;
     box-shadow: var(--shadow);
     min-height: 750px;
     height: auto;
     max-height: 750px;
+    overflow: hidden;
+    position: relative;
 }
 
 .compression-section .panel {
