@@ -411,19 +411,12 @@ python -c "import gradio; print(f'✅ Gradio version: {gradio.__version__}')"
 
 ---
 
-### Step 6: Install llmcompressor (Optional)
-
 For model quantization and compression:
 
 ```bash
-pip install llmcompressor
 ```
 
 **Use cases:**
-- Compress models to reduce size
-- Quantize models (FP16, INT8, INT4)
-- Optimize models for deployment
-
 **Installation time:** 1-2 minutes
 
 ---
@@ -944,25 +937,13 @@ Navigate to the exposed route URL and start using the playground!
 
 ---
 
-### 4. Model Compression with llmcompressor (Optional)
-
 ```bash
 python << 'EOF'
-from llmcompressor.transformers import oneshot
 from transformers import AutoTokenizer
 
-# Example: Quantize a model
-model_path = "facebook/opt-125m"
-output_path = "/workspace/compressed_models/opt-125m-quantized"
+# For model quantization and compression, see:
+# https://github.com/micytao/llmcompressor-playground
 
-# Apply quantization
-oneshot(
-    model=model_path,
-    output_dir=output_path,
-    recipe="autoquant",
-)
-
-print(f"✅ Compressed model saved to: {output_path}")
 EOF
 ```
 
@@ -972,11 +953,7 @@ EOF
 
 - **vLLM Documentation:** https://docs.vllm.ai/
 - **HuggingFace Models:** https://huggingface.co/models
-- **llmcompressor:** https://github.com/vllm-project/llm-compressor
-- **Gated Models Guide:** See `docs/GATED_MODELS_GUIDE.md`
-- **Troubleshooting:** See `docs/TROUBLESHOOTING.md`
-
----
+- **LLMCompressor Playground:** https://github.com/micytao/llmcompressor-playground (for model compression)
 
 ## Summary of Installation Commands
 
@@ -1027,8 +1004,6 @@ python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}')"
 # Install WebUI dependencies
 pip install -r /home/vllm/vllm-playground/requirements.txt
 
-# Optional: Install llmcompressor
-pip install llmcompressor
 
 # Make venv activation automatic across pod restarts
 echo 'source /workspace/venv/bin/activate' >> ~/.bashrc

@@ -1,7 +1,5 @@
 # Command-Line Demo
 
-Complete command-line workflow demonstration for vLLM, LLMCompressor, and GuideLLM integration.
-
 ## 📁 Contents
 
 ```
@@ -9,10 +7,6 @@ cli_demo/
 ├── scripts/                           # Executable scripts
 │   ├── demo_full_workflow.sh          ⭐ Full automated demo
 │   ├── test_vllm_serving.sh           💬 Test vLLM with curl
-│   ├── compress_model.sh              🔧 Compress with LLMCompressor
-│   ├── benchmark_guidellm.sh          📊 Benchmark with GuideLLM
-│   └── README.md                      📖 Scripts documentation
-│
 ├── docs/                              # Documentation
 │   ├── CLI_DEMO_GUIDE.md              📘 Complete guide (500+ lines)
 │   ├── CLI_QUICK_REFERENCE.md         📄 Quick reference card
@@ -35,8 +29,6 @@ Run the complete workflow (all 5 steps):
 This will:
 1. ✅ Start vLLM server with base model
 2. ✅ Test chat serving with curl
-3. ✅ Compress model with LLMCompressor
-4. ✅ Load compressed model into vLLM
 5. ✅ Benchmark performance with GuideLLM
 
 ### Quick Demo (Faster)
@@ -53,11 +45,8 @@ CALIBRATION_SAMPLES=128 BENCHMARK_REQUESTS=50 \
 # Test vLLM serving (make sure server is running first)
 ./cli_demo/scripts/test_vllm_serving.sh
 
-# Compress a model
-./cli_demo/scripts/compress_model.sh \
   "TinyLlama/TinyLlama-1.1B-Chat-v1.0" \
-  "./compressed_models" \
-  "W4A16" \
+    "W4A16" \
   "GPTQ" \
   512
 
@@ -94,7 +83,6 @@ export VLLM_HOST="127.0.0.1"
 export VLLM_PORT="8000"
 export BASE_MODEL="TinyLlama/TinyLlama-1.1B-Chat-v1.0"
 
-# Compression
 export QUANTIZATION_FORMAT="W4A16"
 export CALIBRATION_SAMPLES="512"
 
@@ -108,9 +96,7 @@ export BENCHMARK_RATE="5"
 ```
 1. vLLM Serve      → Start model inference server
 2. Test Serving    → Validate with curl commands
-3. Compress Model  → Quantize with LLMCompressor
-4. Load Compressed → Deploy quantized model
-5. Benchmark       → Measure performance with GuideLLM
+4. Load 5. Benchmark       → Measure performance with GuideLLM
 ```
 
 ## ✨ Features
@@ -123,12 +109,6 @@ export BENCHMARK_RATE="5"
 - ✅ **Beautiful Output** - Colored, formatted terminal display
 
 ## 📊 Supported Configurations
-
-### Quantization Formats
-- `W8A8_INT8` - 8-bit balanced quality
-- `W4A16` - 4-bit high compression
-- `W8A16` - 8-bit good quality
-- `W4A4` - Maximum compression
 
 ### Algorithms
 - `GPTQ` (recommended)
@@ -150,34 +130,6 @@ export BENCHMARK_RATE="5"
 
 ## 🎬 Example Workflows
 
-### Compare Base vs Compressed Model
-
-```bash
-# Benchmark base model
-python -m vllm.entrypoints.openai.api_server \
-  --model TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
-  --port 8000 &
-sleep 30
-./cli_demo/scripts/benchmark_guidellm.sh 100 5 128 128
-
-# Compress
-./cli_demo/scripts/compress_model.sh \
-  "TinyLlama/TinyLlama-1.1B-Chat-v1.0" \
-  "./compressed_models" \
-  "W4A16" \
-  "GPTQ" \
-  512
-
-# Benchmark compressed
-pkill -f vllm.entrypoints.openai.api_server
-python -m vllm.entrypoints.openai.api_server \
-  --model ./compressed_models/TinyLlama_TinyLlama-1.1B-Chat-v1.0_W4A16 \
-  --quantization gptq \
-  --port 8000 &
-sleep 30
-./cli_demo/scripts/benchmark_guidellm.sh 100 5 128 128
-```
-
 ### Manual Step-by-Step
 
 ```bash
@@ -191,21 +143,13 @@ curl http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model": "TinyLlama/TinyLlama-1.1B-Chat-v1.0", "messages": [{"role": "user", "content": "Hello!"}]}'
 
-# 3. Compress
-./cli_demo/scripts/compress_model.sh \
-  "TinyLlama/TinyLlama-1.1B-Chat-v1.0" \
-  "./compressed_models" \
-  "W4A16" \
+# 3.   "TinyLlama/TinyLlama-1.1B-Chat-v1.0" \
+    "W4A16" \
   "GPTQ" \
   512
 
-# 4. Load compressed
-pkill -f vllm.entrypoints.openai.api_server
+# 4. Load pkill -f vllm.entrypoints.openai.api_server
 python -m vllm.entrypoints.openai.api_server \
-  --model ./compressed_models/TinyLlama_TinyLlama-1.1B-Chat-v1.0_W4A16 \
-  --quantization gptq \
-  --port 8000 &
-
 # 5. Benchmark
 ./cli_demo/scripts/benchmark_guidellm.sh 100 5 128 128
 ```
@@ -214,7 +158,7 @@ python -m vllm.entrypoints.openai.api_server \
 
 ```bash
 # Install required packages
-pip install vllm llmcompressor guidellm
+pip install vllm guidellm
 
 # Or use requirements.txt from parent directory
 cd .. && pip install -r requirements.txt
@@ -229,7 +173,7 @@ chmod +x cli_demo/scripts/*.sh
 
 ### Dependencies missing
 ```bash
-pip install vllm llmcompressor guidellm
+pip install vllm guidellm
 ```
 
 ### Server won't start
@@ -251,10 +195,5 @@ This demo is part of vLLM Playground - MIT License
 
 - [Main Project README](../README.md)
 - [vLLM Documentation](https://docs.vllm.ai/)
-- [LLMCompressor](https://github.com/vllm-project/llm-compressor)
-- [GuideLLM](https://github.com/neuralmagic/guidellm)
-
----
-
 **Ready to start? Run:** `./cli_demo/scripts/demo_full_workflow.sh` 🚀
 

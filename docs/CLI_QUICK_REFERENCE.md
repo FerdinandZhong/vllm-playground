@@ -30,10 +30,10 @@ python -m vllm.entrypoints.openai.api_server \
   --model TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
   --port 8000
 
-# With quantized model
+# With pre-quantized model (see LLMCompressor Playground for quantization)
+# https://github.com/micytao/llmcompressor-playground
 python -m vllm.entrypoints.openai.api_server \
-  --model ./compressed_models/MODEL_DIR \
-  --quantization gptq \
+  --model /path/to/quantized/model \
   --port 8000
 
 # CPU mode (macOS)
@@ -84,7 +84,6 @@ curl -N http://localhost:8000/v1/chat/completions \
   "GPTQ" \
   512
 
-# Output: ./compressed_models/TinyLlama_TinyLlama-1.1B-Chat-v1.0_W4A16/
 ```
 
 ### Benchmarking
@@ -151,8 +150,6 @@ export BENCHMARK_RATE="5"
 
 ```bash
 # Check dependencies
-python -c "import vllm, llmcompressor, guidellm"
-
 # Kill vLLM server
 pkill -f "vllm.entrypoints.openai.api_server"
 
@@ -171,8 +168,6 @@ vllm-playground/
 ├── scripts/
 │   ├── demo_full_workflow.sh      # Full demo
 │   ├── test_vllm_serving.sh       # Test serving
-│   ├── compress_model.sh          # Compress models
-│   └── benchmark_guidellm.sh      # Benchmark
 ├── compressed_models/             # Compressed models
 └── benchmark_results/             # Benchmark results
 ```

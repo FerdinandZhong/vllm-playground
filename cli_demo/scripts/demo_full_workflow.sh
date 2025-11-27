@@ -1,11 +1,10 @@
 #!/bin/bash
 # =============================================================================
-# vLLM + LLMCompressor + GuideLLM - Full Workflow Demo
+# vLLM + GuideLLM - Full Workflow Demo
 # =============================================================================
 # This script demonstrates the complete workflow:
 # 1. Start vLLM server with a base model
 # 2. Test chat serving with curl
-# 3. Use LLMCompressor to quantize the model
 # 4. Load quantized model into vLLM
 # 5. Benchmark performance with GuideLLM
 # =============================================================================
@@ -50,7 +49,6 @@ VLLM_HOST="${VLLM_HOST:-127.0.0.1}"
 BASE_URL="http://${VLLM_HOST}:${VLLM_PORT}"
 
 # Compression settings
-COMPRESSED_MODEL_DIR="${COMPRESSED_MODEL_DIR:-./compressed_models}"
 QUANTIZATION_FORMAT="${QUANTIZATION_FORMAT:-W8A8_INT8}"
 ALGORITHM="${ALGORITHM:-GPTQ}"
 CALIBRATION_SAMPLES="${CALIBRATION_SAMPLES:-128}"  # Reduced for demo speed
@@ -122,12 +120,7 @@ check_dependencies() {
         log_success "vLLM installed (version: $vllm_version)"
     fi
     
-    if ! python3 -c "import llmcompressor" 2>/dev/null; then
-        log_error "llmcompressor not installed"
-        missing_deps+=("llmcompressor")
     else
-        local llmc_version=$(python3 -c "import llmcompressor; print(llmcompressor.__version__)" 2>/dev/null || echo "unknown")
-        log_success "llmcompressor installed (version: $llmc_version)"
     fi
     
     if ! python3 -c "import guidellm" 2>/dev/null; then
@@ -149,7 +142,7 @@ check_dependencies() {
         log_error "Missing dependencies: ${missing_deps[*]}"
         echo ""
         log_info "Install missing dependencies:"
-        echo "  pip install vllm llmcompressor guidellm"
+        echo "  pip install vllm guidellm"
         exit 1
     fi
     
@@ -252,9 +245,7 @@ test_chat_serving() {
     fi
 }
 
-# Step 3: Compress model with LLMCompressor
 compress_model() {
-    log_header "🔧 Step 3: Compressing Model with LLMCompressor"
     
     log_info "Model: $BASE_MODEL"
     log_info "Quantization: $QUANTIZATION_FORMAT"
@@ -271,7 +262,6 @@ compress_model() {
     # Check if already compressed
     if [ -f "${output_dir}/config.json" ]; then
         log_warning "Compressed model already exists at $output_dir"
-        read -p "Skip compression and use existing model? (y/n) " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             log_info "Using existing compressed model"
@@ -285,8 +275,6 @@ compress_model() {
     # Create Python compression script
     cat > /tmp/compress_model.py << 'PYTHON_SCRIPT'
 import sys
-from llmcompressor import oneshot
-from llmcompressor.modifiers.quantization import GPTQModifier
 
 def main():
     model = sys.argv[1]
@@ -317,8 +305,6 @@ def main():
         num_calibration_samples=calibration_samples,
     )
     
-    print(f"✓ Compression complete! Model saved to: {output_dir}")
-
 if __name__ == "__main__":
     main()
 PYTHON_SCRIPT
@@ -349,177 +335,3 @@ PYTHON_SCRIPT
         return 1
     fi
 }
-
-# Step 4: Load compressed model into vLLM
-load_compressed_model() {
-    local compressed_model_path="$1"
-    
-    log_header "🔄 Step 4: Loading Compressed Model into vLLM"
-    
-    log_info "Stopping base model server..."
-    cleanup
-    sleep 3
-    
-    log_info "Starting vLLM with compressed model..."
-    log_info "Model path: $compressed_model_path"
-    
-    # Start vLLM with compressed model
-    nohup python3 -m vllm.entrypoints.openai.api_server \
-        --model "$compressed_model_path" \
-        --host "$VLLM_HOST" \
-        --port "$VLLM_PORT" \
-        --dtype auto \
-        --quantization gptq \
-        > /tmp/vllm_compressed.log 2>&1 &
-    
-    local pid=$!
-    echo "$pid" > "$VLLM_PID_FILE"
-    
-    log_info "Server started with PID: $pid"
-    log_info "Logs: tail -f /tmp/vllm_compressed.log"
-    
-    # Wait for server to be ready
-    if ! wait_for_server; then
-        log_error "Failed to start compressed model server"
-        log_info "Check logs: /tmp/vllm_compressed.log"
-        exit 1
-    fi
-    
-    log_success "Compressed model loaded successfully!"
-    
-    # Test the compressed model
-    log_info "Testing compressed model..."
-    local response=$(curl -s "${BASE_URL}/v1/chat/completions" \
-        -H "Content-Type: application/json" \
-        -d '{
-            "model": "'"$compressed_model_path"'",
-            "messages": [
-                {"role": "user", "content": "What is 2+2?"}
-            ],
-            "temperature": 0.7,
-            "max_tokens": 50
-        }')
-    
-    if echo "$response" | grep -q "choices"; then
-        log_success "Compressed model is working!"
-        local content=$(echo "$response" | python3 -c "import sys, json; data = json.load(sys.stdin); print(data['choices'][0]['message']['content'])" 2>/dev/null || echo "")
-        if [ -n "$content" ]; then
-            echo -e "${GREEN}Assistant:${NC} $content"
-        fi
-    else
-        log_warning "Could not verify compressed model response"
-    fi
-}
-
-# Step 5: Benchmark with GuideLLM
-benchmark_with_guidellm() {
-    log_header "📊 Step 5: Benchmarking with GuideLLM"
-    
-    log_info "Configuration:"
-    log_info "  Total requests: $BENCHMARK_REQUESTS"
-    log_info "  Request rate: $BENCHMARK_RATE req/s"
-    log_info "  Prompt tokens: $PROMPT_TOKENS"
-    log_info "  Output tokens: $OUTPUT_TOKENS"
-    
-    local target_url="${BASE_URL}/v1"
-    
-    log_info "Running GuideLLM benchmark..."
-    log_info "Target: $target_url"
-    
-    # Create results directory
-    mkdir -p ./benchmark_results
-    local timestamp=$(date +"%Y%m%d_%H%M%S")
-    local result_file="./benchmark_results/guidellm_${timestamp}.json"
-    
-    # Run GuideLLM
-    python3 -m guidellm benchmark \
-        --target "$target_url" \
-        --rate-type constant \
-        --rate "$BENCHMARK_RATE" \
-        --max-requests "$BENCHMARK_REQUESTS" \
-        --data "prompt_tokens=${PROMPT_TOKENS},output_tokens=${OUTPUT_TOKENS}" \
-        --output "$result_file" 2>&1 | tee /tmp/guidellm_output.log
-    
-    if [ ${PIPESTATUS[0]} -eq 0 ]; then
-        log_success "Benchmark complete!"
-        
-        # Display summary if jq is available
-        if command -v jq &> /dev/null && [ -f "$result_file" ]; then
-            log_info "Benchmark Summary:"
-            cat "$result_file" | jq -r '
-                "  Success Rate: \(.success_rate // "N/A")%",
-                "  Total Requests: \(.total_requests // "N/A")",
-                "  Avg Latency: \(.avg_latency // "N/A")s",
-                "  Throughput: \(.throughput // "N/A") tok/s"
-            ' 2>/dev/null || log_info "Results saved to: $result_file"
-        else
-            log_info "Results saved to: $result_file"
-        fi
-        
-        # Also show last 20 lines of output
-        log_info "Latest benchmark output:"
-        tail -20 /tmp/guidellm_output.log | grep -E "(Request|Latency|Throughput|Success)" || true
-    else
-        log_error "Benchmark failed"
-        log_info "Check logs: /tmp/guidellm_output.log"
-        return 1
-    fi
-}
-
-# Main workflow
-main() {
-    log_header "🎬 vLLM + LLMCompressor + GuideLLM Demo"
-    
-    echo "Configuration:"
-    echo "  Base Model: $BASE_MODEL"
-    echo "  Quantization: $QUANTIZATION_FORMAT ($ALGORITHM)"
-    echo "  vLLM Port: $VLLM_PORT"
-    echo "  Benchmark: $BENCHMARK_REQUESTS requests @ ${BENCHMARK_RATE} req/s"
-    echo ""
-    
-    read -p "Press Enter to start the demo, or Ctrl+C to cancel..." -r
-    echo ""
-    
-    # Execute workflow
-    check_dependencies
-    start_vllm_server
-    test_chat_serving
-    
-    # Ask before compression (it's slow)
-    echo ""
-    log_warning "Model compression can take 10-30 minutes depending on your hardware."
-    read -p "Continue with compression? (y/n) " -n 1 -r
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        log_info "Skipping compression and benchmarking."
-        log_info "To manually compress later, see: scripts/compress_model.sh"
-        exit 0
-    fi
-    
-    compressed_model_path=$(compress_model)
-    
-    if [ -n "$compressed_model_path" ] && [ -d "$compressed_model_path" ]; then
-        load_compressed_model "$compressed_model_path"
-        benchmark_with_guidellm
-    else
-        log_error "Failed to get compressed model path"
-        exit 1
-    fi
-    
-    # Final summary
-    log_header "🎉 Demo Complete!"
-    echo "Summary:"
-    echo "  ✓ vLLM server started and tested"
-    echo "  ✓ Model compressed with LLMCompressor"
-    echo "  ✓ Compressed model loaded and verified"
-    echo "  ✓ Performance benchmarked with GuideLLM"
-    echo ""
-    log_info "Server is still running. Press Ctrl+C to stop."
-    
-    # Keep script running
-    wait
-}
-
-# Run main function
-main
-

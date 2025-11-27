@@ -9,11 +9,6 @@ class VLLMWebUI {
         this.benchmarkRunning = false;
         this.benchmarkPollInterval = null;
         
-        // Compression state
-        this.compressionRunning = false;
-        this.compressionPollInterval = null;
-        this.selectedPreset = null;
-        
         // Current vLLM config
         this.currentConfig = null;
         
@@ -141,51 +136,13 @@ class VLLMWebUI {
             copyGuidellmJsonBtn: document.getElementById('copy-guidellm-json-btn'),
             toggleJsonOutputBtn: document.getElementById('toggle-json-output-btn'),
             guidellmJsonOutputContent: document.getElementById('guidellm-json-output-content'),
-            compressionSectionContent: document.getElementById('compression-section-content'),
             metricsSectionContent: document.getElementById('metrics-section-content'),
             metricsDisplay: document.getElementById('metrics-display'),
             metricsGrid: document.getElementById('metrics-grid'),
             benchmarkProgress: document.getElementById('benchmark-progress'),
             progressFill: document.getElementById('progress-fill'),
             progressStatus: document.getElementById('progress-status'),
-            progressPercent: document.getElementById('progress-percent'),
-            
-            // Compression elements
-            runCompressionBtn: document.getElementById('run-compression-btn'),
-            stopCompressionBtn: document.getElementById('stop-compression-btn'),
-            presetsContainer: document.getElementById('presets-container'),
-            compressModelSelect: document.getElementById('compress-model-select'),
-            compressCustomModel: document.getElementById('compress-custom-model'),
-            compressFormat: document.getElementById('compress-format'),
-            compressAlgorithm: document.getElementById('compress-algorithm'),
-            compressDataset: document.getElementById('compress-dataset'),
-            compressSamples: document.getElementById('compress-samples'),
-            compressSeqLength: document.getElementById('compress-seq-length'),
-            compressHfToken: document.getElementById('compress-hf-token'),
-            compressTargetLayers: document.getElementById('compress-target-layers'),
-            compressIgnoreLayers: document.getElementById('compress-ignore-layers'),
-            compressSmoothing: document.getElementById('compress-smoothing'),
-            advancedToggle: document.getElementById('advanced-toggle'),
-            advancedContent: document.getElementById('advanced-content'),
-            compressCommandText: document.getElementById('compress-command-text'),
-            copyCompressCommandBtn: document.getElementById('copy-compress-command-btn'),
-            compressionStatusDisplay: document.getElementById('compression-status-display'),
-            compressionStageBadge: document.getElementById('compression-stage-badge'),
-            compressionProgressFill: document.getElementById('compression-progress-fill'),
-            compressionProgressMessage: document.getElementById('compression-progress-message'),
-            compressionProgressPercent: document.getElementById('compression-progress-percent'),
-            sizeComparison: document.getElementById('size-comparison'),
-            originalSize: document.getElementById('original-size'),
-            compressedSize: document.getElementById('compressed-size'),
-            compressionRatio: document.getElementById('compression-ratio'),
-            compressionTimer: document.getElementById('compression-timer'),
-            compressionTimerValue: document.getElementById('compression-timer-value'),
-            outputDirectoryDisplay: document.getElementById('output-directory-display'),
-            outputDirPath: document.getElementById('output-dir-path'),
-            compressionActions: document.getElementById('compression-actions'),
-            downloadCompressedBtn: document.getElementById('download-compressed-btn'),
-            loadCompressedBtn: document.getElementById('load-compressed-btn'),
-            newCompressionBtn: document.getElementById('new-compression-btn')
+            progressPercent: document.getElementById('progress-percent')
         };
 
         // Attach event listeners
@@ -208,12 +165,6 @@ class VLLMWebUI {
         
         // Initialize chat template for default model (silent mode - no notification)
         this.updateTemplateForModel(true);
-        
-        // Load compression presets
-        this.loadCompressionPresets();
-        
-        // Initialize compression command preview
-        this.updateCompressCommandPreview();
         
         // Initialize benchmark command preview
         this.updateBenchmarkCommandPreview();
@@ -355,36 +306,6 @@ class VLLMWebUI {
         this.elements.copyGuidellmJsonBtn.addEventListener('click', () => this.copyGuidellmJson());
         this.elements.toggleJsonOutputBtn.addEventListener('click', () => this.toggleJsonOutput());
         
-        // Compression
-        this.elements.runCompressionBtn.addEventListener('click', () => this.runCompression());
-        this.elements.stopCompressionBtn.addEventListener('click', () => this.stopCompression());
-        this.elements.advancedToggle.addEventListener('click', () => this.toggleAdvancedOptions());
-        this.elements.downloadCompressedBtn.addEventListener('click', () => this.downloadCompressed());
-        this.elements.loadCompressedBtn.addEventListener('click', () => this.loadCompressedIntoVLLM());
-        this.elements.newCompressionBtn.addEventListener('click', () => this.resetCompression());
-        this.elements.copyCompressCommandBtn.addEventListener('click', () => this.copyCompressCommand());
-        this.elements.outputDirPath.addEventListener('click', () => this.copyOutputPath());
-        
-        // Compression config changes - update command preview
-        const compressConfigElements = [
-            this.elements.compressModelSelect,
-            this.elements.compressCustomModel,
-            this.elements.compressFormat,
-            this.elements.compressAlgorithm,
-            this.elements.compressDataset,
-            this.elements.compressSamples,
-            this.elements.compressSeqLength,
-            this.elements.compressHfToken,
-            this.elements.compressTargetLayers,
-            this.elements.compressIgnoreLayers,
-            this.elements.compressSmoothing
-        ];
-        
-        compressConfigElements.forEach(element => {
-            element.addEventListener('input', () => this.updateCompressCommandPreview());
-            element.addEventListener('change', () => this.updateCompressCommandPreview());
-        });
-        
         // Template Settings
         this.elements.templateSettingsToggle.addEventListener('click', () => this.toggleTemplateSettings());
         this.elements.modelSelect.addEventListener('change', () => {
@@ -447,13 +368,6 @@ class VLLMWebUI {
                 }
                 
                 console.warn('GuideLLM is not available. Install with: pip install guidellm');
-            }
-            
-            // Disable llmcompressor tab if not available
-            if (!features.llmcompressor && this.elements.compressionTab) {
-                this.elements.compressionTab.disabled = true;
-                this.elements.compressionTab.title = 'LLM Compressor not installed. Run: pip install llmcompressor';
-                console.warn('LLM Compressor is not available. Install with: pip install llmcompressor');
             }
         } catch (error) {
             console.error('Failed to check feature availability:', error);
@@ -1761,11 +1675,23 @@ class VLLMWebUI {
             console.log('[POLL] Benchmark status:', data);
 
             if (data.running) {
-                // Update progress (estimate based on time)
-                // This is approximate since we don't have real-time progress
+                // GuideLLM doesn't output real-time progress, so we estimate based on time
                 const elapsed = Date.now() - this.benchmarkStartTime;
                 const estimated = (this.elements.benchmarkRequests.value / this.elements.benchmarkRate.value) * 1000;
-                const progress = Math.min(95, (elapsed / estimated) * 100);
+                
+                // Use a smoother curve that goes up to 98% (leaving 2% for completion)
+                let progress;
+                if (elapsed < estimated) {
+                    // Linear progress up to 90%
+                    progress = (elapsed / estimated) * 90;
+                } else {
+                    // Slow down after estimated time: 90% -> 98% over 2x the time
+                    const overtime = elapsed - estimated;
+                    const slowProgress = 90 + (Math.min(overtime / estimated, 1) * 8);
+                    progress = Math.min(98, slowProgress);
+                }
+                
+                console.log(`[POLL] Estimated progress: ${progress.toFixed(1)}% (${elapsed}ms elapsed, ${estimated}ms estimated)`);
                 
                 this.elements.progressFill.style.width = `${progress}%`;
                 this.elements.progressPercent.textContent = `${progress.toFixed(0)}%`;
@@ -2442,16 +2368,9 @@ class VLLMWebUI {
         } else {
             // Vertical resize (horizontal handles for row resizing)
             // Determine which panel to resize based on the handle ID
-            if (handle.id === 'compression-resize-handle') {
-                // Handle between main-content and compression section
-                this.resizingPanel = document.getElementById('compression-panel');
-                this.resizeMode = 'bottom';
-                this.startHeight = this.resizingPanel.offsetHeight;
-            } else if (handle.id === 'metrics-resize-handle') {
-                // Handle between compression and metrics sections
+            if (handle.id === 'metrics-resize-handle') {
+                // Handle between chat and metrics sections
                 this.resizingPanel = document.getElementById('metrics-panel');
-                this.resizeMode = 'bottom';
-                this.startHeight = this.resizingPanel.offsetHeight;
             }
         }
     }
@@ -2525,7 +2444,6 @@ class VLLMWebUI {
         const layout = {
             configWidth: document.getElementById('config-panel')?.offsetWidth,
             logsWidth: document.getElementById('logs-panel')?.offsetWidth,
-            compressionHeight: document.getElementById('compression-panel')?.offsetHeight,
             metricsHeight: document.querySelector('.metrics-section .panel')?.offsetHeight
         };
         
@@ -2552,14 +2470,6 @@ class VLLMWebUI {
                     if (logsPanel) logsPanel.style.width = `${layout.logsWidth}px`;
                 }
                 
-                if (layout.compressionHeight) {
-                    const compressionPanel = document.getElementById('compression-panel');
-                    if (compressionPanel) {
-                        compressionPanel.style.height = `${layout.compressionHeight}px`;
-                        const innerPanel = compressionPanel.querySelector('.panel');
-                        if (innerPanel) innerPanel.style.height = `${layout.compressionHeight}px`;
-                    }
-                }
                 
                 if (layout.metricsHeight) {
                     const metricsPanel = document.querySelector('.metrics-section .panel');
@@ -2568,323 +2478,6 @@ class VLLMWebUI {
             }
         } catch (e) {
             console.warn('Could not load layout preferences:', e);
-        }
-    }
-    
-    // ============ Compression Functions ============
-    
-    async loadCompressionPresets() {
-        try {
-            const response = await fetch('/api/compress/presets');
-            if (response.ok) {
-                const data = await response.json();
-                this.displayPresets(data.presets);
-            }
-        } catch (error) {
-            console.error('Failed to load compression presets:', error);
-            this.elements.presetsContainer.innerHTML = '<div class="preset-error">Failed to load presets</div>';
-        }
-    }
-    
-    displayPresets(presets) {
-        this.elements.presetsContainer.innerHTML = '';
-        
-        presets.forEach(preset => {
-            const presetCard = document.createElement('div');
-            presetCard.className = 'preset-card';
-            presetCard.innerHTML = `
-                <div class="preset-emoji">${preset.emoji}</div>
-                <div class="preset-name">${preset.name}</div>
-                <div class="preset-description">${preset.description}</div>
-                <div class="preset-stats">
-                    <span class="preset-stat">⚡ ${preset.expected_speedup}</span>
-                    <span class="preset-stat">📦 ${preset.size_reduction}</span>
-                </div>
-            `;
-            
-            presetCard.addEventListener('click', () => this.applyPreset(preset));
-            this.elements.presetsContainer.appendChild(presetCard);
-        });
-    }
-    
-    applyPreset(preset) {
-        // Apply preset configuration
-        this.selectedPreset = preset;
-        this.elements.compressFormat.value = preset.quantization_format;
-        this.elements.compressAlgorithm.value = preset.algorithm;
-        
-        // Update command preview with new preset values
-        this.updateCompressCommandPreview();
-        
-        // Visual feedback
-        document.querySelectorAll('.preset-card').forEach(card => {
-            card.classList.remove('selected');
-        });
-        event.target.closest('.preset-card').classList.add('selected');
-        
-        this.showNotification(`Applied preset: ${preset.name}`, 'success');
-    }
-    
-    toggleAdvancedOptions() {
-        const content = this.elements.advancedContent;
-        const icon = this.elements.advancedToggle.querySelector('.toggle-icon');
-        const rightColumn = document.querySelector('.compression-right-column');
-        
-        if (content.style.display === 'none') {
-            content.style.display = 'block';
-            icon.classList.add('open');
-            // Add class to indicate advanced options are expanded
-            rightColumn.classList.add('advanced-expanded');
-        } else {
-            content.style.display = 'none';
-            icon.classList.remove('open');
-            // Remove class when advanced options are collapsed
-            rightColumn.classList.remove('advanced-expanded');
-        }
-    }
-    
-    async runCompression() {
-        if (this.compressionRunning) {
-            this.showNotification('Compression already running', 'warning');
-            return;
-        }
-        
-        // Get model from dropdown or custom input
-        const model = this.elements.compressCustomModel.value.trim() || 
-                     this.elements.compressModelSelect.value;
-        
-        if (!model) {
-            this.showNotification('Please select or enter a model', 'error');
-            return;
-        }
-        
-        // Check if gated model requires HF token
-        const model_lower = model.toLowerCase();
-        const isGated = model_lower.includes('meta-llama/') || 
-                       model_lower.includes('redhatai/llama') ||
-                       model_lower.includes('gated');
-        
-        const hfToken = this.elements.compressHfToken?.value?.trim() || null;
-        
-        if (isGated && !hfToken) {
-            this.showNotification(`⚠️ ${model} is a gated model and requires a HuggingFace token!`, 'error');
-            this.addLog(`❌ Gated model requires HF token: ${model}`, 'error');
-            return;
-        }
-        
-        const config = {
-            model: model,
-            quantization_format: this.elements.compressFormat.value,
-            algorithm: this.elements.compressAlgorithm.value,
-            dataset: this.elements.compressDataset.value,
-            num_calibration_samples: parseInt(this.elements.compressSamples.value),
-            max_seq_length: parseInt(this.elements.compressSeqLength.value),
-            target_layers: this.elements.compressTargetLayers.value,
-            ignore_layers: this.elements.compressIgnoreLayers.value,
-            smoothing_strength: parseFloat(this.elements.compressSmoothing.value),
-            hf_token: hfToken
-        };
-        
-        console.log('Starting compression with config:', config);
-        
-        this.compressionRunning = true;
-        this.elements.runCompressionBtn.disabled = true;
-        this.elements.runCompressionBtn.style.display = 'none';
-        this.elements.stopCompressionBtn.disabled = false;
-        this.elements.stopCompressionBtn.style.display = 'inline-block';
-        // Status display is always visible now
-        
-        try {
-            const response = await fetch('/api/compress/start', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(config)
-            });
-            
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.detail || 'Failed to start compression');
-            }
-            
-            // Start polling for status (every 1 second for smooth timer updates)
-            this.compressionPollInterval = setInterval(() => this.pollCompressionStatus(), 1000);
-            this.showNotification('Compression started', 'success');
-            
-        } catch (error) {
-            console.error('Failed to start compression:', error);
-            this.showNotification(`Failed to start: ${error.message}`, 'error');
-            this.resetCompressionUI();
-        }
-    }
-    
-    async stopCompression() {
-        try {
-            await fetch('/api/compress/stop', {method: 'POST'});
-            this.showNotification('Compression stopped', 'info');
-        } catch (error) {
-            console.error('Failed to stop compression:', error);
-        }
-        this.resetCompressionUI();
-    }
-    
-    async pollCompressionStatus() {
-        try {
-            const response = await fetch('/api/compress/status');
-            const status = await response.json();
-            
-            this.updateCompressionStatus(status);
-            
-            if (!status.running && (status.stage === 'complete' || status.stage === 'error' || status.stage === 'cancelled')) {
-                clearInterval(this.compressionPollInterval);
-                this.compressionPollInterval = null;
-                this.compressionRunning = false;
-                
-                if (status.stage === 'complete') {
-                    this.showNotification('Compression completed!', 'success');
-                    this.elements.compressionActions.style.display = 'block';
-                } else if (status.stage === 'error') {
-                    this.showNotification(`Compression failed: ${status.error}`, 'error');
-                }
-                
-                this.elements.stopCompressionBtn.disabled = true;
-                this.elements.stopCompressionBtn.style.display = 'none';
-            }
-        } catch (error) {
-            console.error('Failed to poll compression status:', error);
-        }
-    }
-    
-    updateCompressionStatus(status) {
-        // Update progress bar with smooth transition
-        this.elements.compressionProgressFill.style.transition = 'width 0.5s ease';
-        this.elements.compressionProgressFill.style.width = `${status.progress}%`;
-        this.elements.compressionProgressPercent.textContent = `${status.progress.toFixed(0)}%`;
-        this.elements.compressionProgressMessage.textContent = status.message;
-        
-        // Update stage badge
-        this.elements.compressionStageBadge.textContent = status.stage.toUpperCase();
-        this.elements.compressionStageBadge.className = `stage-badge stage-${status.stage}`;
-        
-        // Update timer display (compact)
-        if (status.elapsed_time !== null && status.elapsed_time !== undefined) {
-            this.elements.compressionTimer.style.display = 'flex';
-            const hours = Math.floor(status.elapsed_time / 3600);
-            const minutes = Math.floor((status.elapsed_time % 3600) / 60);
-            const seconds = Math.floor(status.elapsed_time % 60);
-            const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-            this.elements.compressionTimerValue.textContent = timeStr;
-        } else if (status.running) {
-            this.elements.compressionTimer.style.display = 'flex';
-        }
-        
-        // Update size comparison if available
-        if (status.original_size_mb || status.compressed_size_mb) {
-            this.elements.sizeComparison.style.display = 'flex';
-            
-            if (status.original_size_mb) {
-                this.elements.originalSize.textContent = `${status.original_size_mb.toFixed(0)} MB`;
-            }
-            
-            if (status.compressed_size_mb) {
-                this.elements.compressedSize.textContent = `${status.compressed_size_mb.toFixed(0)} MB`;
-            }
-            
-            if (status.compression_ratio) {
-                this.elements.compressionRatio.textContent = `${status.compression_ratio.toFixed(2)}x`;
-            }
-        }
-        
-        // Update output directory display if available
-        if (status.output_dir) {
-            this.elements.outputDirectoryDisplay.style.display = 'block';
-            this.elements.outputDirPath.textContent = status.output_dir;
-        }
-    }
-    
-    resetCompressionUI() {
-        this.compressionRunning = false;
-        this.elements.runCompressionBtn.disabled = false;
-        this.elements.runCompressionBtn.style.display = 'inline-block';
-        this.elements.stopCompressionBtn.disabled = true;
-        this.elements.stopCompressionBtn.style.display = 'none';
-        
-        if (this.compressionPollInterval) {
-            clearInterval(this.compressionPollInterval);
-            this.compressionPollInterval = null;
-        }
-    }
-    
-    resetCompression() {
-        // Don't hide the status display anymore - it's always visible
-        this.elements.compressionActions.style.display = 'none';
-        this.elements.sizeComparison.style.display = 'none';
-        this.elements.outputDirectoryDisplay.style.display = 'none';
-        this.elements.compressionTimer.style.display = 'none';
-        this.elements.compressionTimerValue.textContent = '00:00:00';
-        this.elements.compressionProgressFill.style.width = '0%';
-        this.elements.compressionProgressPercent.textContent = '0%';
-        this.elements.compressionProgressMessage.textContent = 'Ready to compress';
-        this.elements.compressionStageBadge.textContent = 'IDLE';
-        this.elements.compressionStageBadge.className = 'stage-badge stage-idle';
-        this.resetCompressionUI();
-        this.showNotification('Ready for new compression', 'success');
-    }
-    
-    async downloadCompressed() {
-        try {
-            window.open('/api/compress/download', '_blank');
-            this.showNotification('Downloading compressed model...', 'success');
-        } catch (error) {
-            console.error('Failed to download:', error);
-            this.showNotification('Failed to download model', 'error');
-        }
-    }
-    
-    async loadCompressedIntoVLLM() {
-        // Get the output directory path from compression status
-        const outputPath = this.elements.outputDirPath.textContent;
-        
-        if (!outputPath || outputPath === '--') {
-            this.showNotification('No compressed model path available', 'error');
-            return;
-        }
-        
-        try {
-            // Switch to local model mode
-            this.elements.modelSourceLocal.checked = true;
-            this.toggleModelSource();
-            
-            // Set the local model path
-            this.elements.localModelPath.value = outputPath;
-            
-            // Validate the path
-            await this.validateLocalModelPath();
-            
-            // Scroll to the configuration panel
-            document.getElementById('config-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
-            
-            // Show success notification
-            this.showNotification('✅ Compressed model loaded! Review settings and click "Start Server"', 'success');
-            
-            // Optionally update command preview
-            this.updateCommandPreview();
-            
-        } catch (error) {
-            console.error('Error loading compressed model:', error);
-            this.showNotification('Failed to load compressed model', 'error');
-        }
-    }
-    
-    async copyOutputPath() {
-        const path = this.elements.outputDirPath.textContent;
-        if (path && path !== '--') {
-            try {
-                await navigator.clipboard.writeText(path);
-                this.showNotification('Output path copied to clipboard!', 'success');
-            } catch (error) {
-                console.error('Failed to copy:', error);
-                this.showNotification('Failed to copy path', 'error');
-            }
         }
     }
     
@@ -2995,7 +2588,6 @@ class VLLMWebUI {
         }
     }
 
-
     async copyGuidellmJson() {
         const jsonOutput = document.getElementById('guidellm-json-output');
         if (jsonOutput) {
@@ -3009,185 +2601,7 @@ class VLLMWebUI {
         }
     }
     
-    // ============ Compression Command Preview ============
-    
-    updateCompressCommandPreview() {
-        const model = this.elements.compressCustomModel.value.trim() || 
-                     this.elements.compressModelSelect.value;
-        const format = this.elements.compressFormat.value;
-        const algorithm = this.elements.compressAlgorithm.value;
-        const dataset = this.elements.compressDataset.value;
-        const samples = this.elements.compressSamples.value;
-        const seqLength = this.elements.compressSeqLength.value;
-        const targetLayers = this.elements.compressTargetLayers.value;
-        const ignoreLayers = this.elements.compressIgnoreLayers.value;
-        const smoothing = this.elements.compressSmoothing.value;
-        const hfToken = this.elements.compressHfToken?.value?.trim() || '';
-        
-        // Check if gated model
-        const model_lower = model.toLowerCase();
-        const isGated = model_lower.includes('meta-llama/') || 
-                       model_lower.includes('redhatai/llama') ||
-                       model_lower.includes('gated');
-        
-        // Build Python script command
-        let cmd = '# Compression using LLM-Compressor\n';
-        cmd += 'from llmcompressor import oneshot\n';
-        
-        if (algorithm === 'SmoothQuant') {
-            cmd += 'from llmcompressor.modifiers.smoothquant import SmoothQuantModifier\n';
         }
-        
-        // Import both modifiers, but use appropriate one based on format
-        if (format === 'W8A8_FP8' || format === 'FP4_W4A16' || format === 'FP4_W4A4') {
-            cmd += 'from llmcompressor.modifiers.quantization import QuantizationModifier\n\n';
-        } else {
-            cmd += 'from llmcompressor.modifiers.quantization import GPTQModifier\n\n';
-        }
-        
-        if (isGated || hfToken) {
-            cmd += '# Set HuggingFace token for gated model\n';
-            cmd += 'import os\n';
-            if (hfToken) {
-                // Mask the token for security (show first 7 chars like "hf_xxxx...")
-                const maskedToken = hfToken.length > 7 ? hfToken.substring(0, 7) + '...' : '***';
-                cmd += `os.environ["HF_TOKEN"] = "${maskedToken}"  # Your actual token\n\n`;
-            } else {
-                cmd += 'os.environ["HF_TOKEN"] = "YOUR_HF_TOKEN_HERE"\n\n';
-            }
-        }
-        
-        cmd += '# Build compression recipe\n';
-        cmd += 'recipe = [\n';
-        
-        if (algorithm === 'SmoothQuant') {
-            cmd += `    SmoothQuantModifier(smoothing_strength=${smoothing}),\n`;
-        }
-        
-        // Map format to scheme
-        const schemeMap = {
-            'W8A8_INT8': 'W8A8',
-            'W8A8_FP8': null,  // Handled separately
-            'W4A16': 'W4A16',
-            'W4A16_ASYM': 'W4A16_ASYM',
-            'FP4_W4A16': null,  // Handled separately
-            'FP4_W4A4': null,   // Handled separately
-        };
-        const scheme = schemeMap[format];
-        
-        // FP8 requires QuantizationModifier with explicit config
-        if (format === 'W8A8_FP8') {
-            cmd += `    QuantizationModifier(\n`;
-            cmd += `        targets="${targetLayers}",\n`;
-            cmd += `        scheme={\n`;
-            cmd += `            "input_activations": {\n`;
-            cmd += `                "num_bits": 8,\n`;
-            cmd += `                "type": "float",\n`;
-            cmd += `                "symmetric": True,\n`;
-            cmd += `            },\n`;
-            cmd += `            "weights": {\n`;
-            cmd += `                "num_bits": 8,\n`;
-            cmd += `                "type": "float",\n`;
-            cmd += `                "symmetric": True,\n`;
-            cmd += `            }\n`;
-            cmd += `        },\n`;
-            cmd += `        ignore=["${ignoreLayers}"]\n`;
-            cmd += `    )\n`;
-        } else if (format === 'FP4_W4A16') {
-            // NVFP4A16 - 4-bit FP4 weights, 16-bit activations
-            cmd += `    QuantizationModifier(\n`;
-            cmd += `        targets="${targetLayers}",\n`;
-            cmd += `        scheme={\n`;
-            cmd += `            "weights": {\n`;
-            cmd += `                "num_bits": 4,\n`;
-            cmd += `                "type": "float",\n`;
-            cmd += `                "symmetric": True,\n`;
-            cmd += `                "strategy": "tensor",\n`;
-            cmd += `            },\n`;
-            cmd += `            "input_activations": {\n`;
-            cmd += `                "num_bits": 16,\n`;
-            cmd += `                "type": "float",\n`;
-            cmd += `                "symmetric": True,\n`;
-            cmd += `            }\n`;
-            cmd += `        },\n`;
-            cmd += `        ignore=["${ignoreLayers}"]\n`;
-            cmd += `    )\n`;
-        } else if (format === 'FP4_W4A4') {
-            // NVFP4 - 4-bit FP4 weights and activations
-            cmd += `    QuantizationModifier(\n`;
-            cmd += `        targets="${targetLayers}",\n`;
-            cmd += `        scheme={\n`;
-            cmd += `            "weights": {\n`;
-            cmd += `                "num_bits": 4,\n`;
-            cmd += `                "type": "float",\n`;
-            cmd += `                "symmetric": True,\n`;
-            cmd += `                "strategy": "tensor",\n`;
-            cmd += `            },\n`;
-            cmd += `            "input_activations": {\n`;
-            cmd += `                "num_bits": 4,\n`;
-            cmd += `                "type": "float",\n`;
-            cmd += `                "symmetric": True,\n`;
-            cmd += `                "strategy": "tensor",\n`;
-            cmd += `            }\n`;
-            cmd += `        },\n`;
-            cmd += `        ignore=["${ignoreLayers}"]\n`;
-            cmd += `    )\n`;
-        } else {
-            cmd += `    GPTQModifier(\n`;
-            cmd += `        scheme="${scheme || 'W8A8'}",\n`;
-            cmd += `        targets="${targetLayers}",\n`;
-            cmd += `        ignore=["${ignoreLayers}"]\n`;
-            cmd += `    )\n`;
-        }
-        cmd += ']\n\n';
-        
-        // Generate output directory name based on model and scheme
-        const modelName = model.split('/').pop();  // Get last part after slash
-        const cleanModelName = modelName.replace(/[/:]/g, '_').replace(/\s+/g, '_');
-        const schemeLower = schemeMap[format] || format;
-        
-        // Add timestamp example (actual backend will use current time)
-        const now = new Date();
-        const timestamp = now.toISOString().replace(/[-:]/g, '').replace('T', '_').split('.')[0];
-        const outputDir = `./compressed_${cleanModelName}_${schemeLower.toLowerCase()}_${timestamp}`;
-        
-        cmd += '# Run compression\n';
-        cmd += 'oneshot(\n';
-        cmd += `    model="${model}",\n`;
-        cmd += `    dataset="${dataset}",\n`;
-        cmd += `    recipe=recipe,\n`;
-        cmd += `    output_dir="${outputDir}",  # Timestamp added to avoid overwriting\n`;
-        cmd += `    max_seq_length=${seqLength},\n`;
-        cmd += `    num_calibration_samples=${samples}\n`;
-        cmd += ')';
-        
-        this.elements.compressCommandText.value = cmd;
-    }
-    
-    async copyCompressCommand() {
-        const commandText = this.elements.compressCommandText.value;
-        
-        try {
-            await navigator.clipboard.writeText(commandText);
-            
-            // Visual feedback
-            const originalText = this.elements.copyCompressCommandBtn.textContent;
-            this.elements.copyCompressCommandBtn.textContent = 'Copied!';
-            this.elements.copyCompressCommandBtn.classList.add('copied');
-            
-            setTimeout(() => {
-                this.elements.copyCompressCommandBtn.textContent = originalText;
-                this.elements.copyCompressCommandBtn.classList.remove('copied');
-            }, 2000);
-            
-            this.showNotification('Command copied to clipboard!', 'success');
-        } catch (err) {
-            console.error('Failed to copy command:', err);
-            this.showNotification('Failed to copy command', 'error');
-        }
-    }
-}
-
 // Add CSS animations for notifications
 const style = document.createElement('style');
 style.textContent = `
@@ -3222,82 +2636,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load saved layout preferences
     window.vllmUI.loadLayoutPreferences();
     
-    // Initialize compression section resize functionality
-    initCompressionResize();
+    
 });
-
-/**
- * Initialize resize functionality for compression section
- */
-function initCompressionResize() {
-    const presetsSection = document.querySelector('.compression-presets');
-    const leftColumn = document.querySelector('.compression-left-column');
-    const commandPreview = document.querySelector('.compression-command-preview');
-    
-    if (!presetsSection || !leftColumn || !commandPreview) return;
-    
-    let isResizing = false;
-    let startY = 0;
-    let startHeight = 0;
-    
-    // Create a visual resize handle
-    const resizeHandle = document.createElement('div');
-    resizeHandle.className = 'compression-resize-divider';
-    resizeHandle.style.cssText = `
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        height: 8px;
-        cursor: row-resize;
-        background: transparent;
-        z-index: 10;
-        transition: background 0.2s;
-    `;
-    presetsSection.style.position = 'relative';
-    presetsSection.appendChild(resizeHandle);
-    
-    // Hover effect
-    resizeHandle.addEventListener('mouseenter', () => {
-        resizeHandle.style.background = 'rgba(79, 70, 229, 0.3)';
-    });
-    
-    resizeHandle.addEventListener('mouseleave', () => {
-        if (!isResizing) {
-            resizeHandle.style.background = 'transparent';
-        }
-    });
-    
-    // Start resize
-    resizeHandle.addEventListener('mousedown', (e) => {
-        isResizing = true;
-        startY = e.clientY;
-        startHeight = presetsSection.offsetHeight;
-        document.body.style.cursor = 'row-resize';
-        document.body.style.userSelect = 'none';
-        e.preventDefault();
-    });
-    
-    // Handle resize
-    document.addEventListener('mousemove', (e) => {
-        if (!isResizing) return;
-        
-        const deltaY = e.clientY - startY;
-        const newHeight = Math.max(150, Math.min(startHeight + deltaY, 500));
-        presetsSection.style.height = `${newHeight}px`;
-        presetsSection.style.flexBasis = `${newHeight}px`;
-        presetsSection.style.flex = `0 0 ${newHeight}px`;
-    });
-    
-    // Stop resize
-    document.addEventListener('mouseup', () => {
-        if (isResizing) {
-            isResizing = false;
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-            resizeHandle.style.background = 'transparent';
-        }
-    });
-}
-
 

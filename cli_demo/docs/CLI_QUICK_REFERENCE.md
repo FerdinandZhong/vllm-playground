@@ -73,20 +73,6 @@ curl -N http://localhost:8000/v1/chat/completions \
   }'
 ```
 
-### Model Compression
-
-```bash
-# Compress TinyLlama with W4A16
-./scripts/compress_model.sh \
-  "TinyLlama/TinyLlama-1.1B-Chat-v1.0" \
-  "./compressed_models" \
-  "W4A16" \
-  "GPTQ" \
-  512
-
-# Output: ./compressed_models/TinyLlama_TinyLlama-1.1B-Chat-v1.0_W4A16/
-```
-
 ### Benchmarking
 
 ```bash
@@ -126,15 +112,6 @@ export BENCHMARK_REQUESTS="100"
 export BENCHMARK_RATE="5"
 ```
 
-## 📊 Quantization Formats
-
-| Format | Description | Use Case |
-|--------|-------------|----------|
-| `W8A8_INT8` | 8-bit weights & activations | Balanced quality/size |
-| `W4A16` | 4-bit weights, 16-bit activations | Best compression |
-| `W8A16` | 8-bit weights, 16-bit activations | Good quality |
-| `W4A4` | 4-bit weights & activations | Maximum compression |
-
 ## 🎯 Recommended Models
 
 ### CPU/macOS
@@ -151,7 +128,6 @@ export BENCHMARK_RATE="5"
 
 ```bash
 # Check dependencies
-python -c "import vllm, llmcompressor, guidellm"
 
 # Kill vLLM server
 pkill -f "vllm.entrypoints.openai.api_server"

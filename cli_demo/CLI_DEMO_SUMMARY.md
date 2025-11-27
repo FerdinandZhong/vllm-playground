@@ -2,8 +2,6 @@
 
 ## What Was Created
 
-I've implemented a comprehensive command-line demo system for showcasing vLLM, LLMCompressor, and GuideLLM working together, exactly as you outlined.
-
 ## 📁 New Files Created
 
 ### Executable Scripts (in `scripts/`)
@@ -21,13 +19,6 @@ I've implemented a comprehensive command-line demo system for showcasing vLLM, L
    - Chat completions (streaming & non-streaming)
    - Multi-turn conversations
    - Pretty formatted output
-
-3. **`compress_model.sh`** - Model compression script
-   - Standalone LLMCompressor integration
-   - Configurable quantization formats
-   - Progress reporting
-   - Size estimation
-   - Usage instructions in output
 
 4. **`benchmark_guidellm.sh`** - Performance benchmarking
    - Standalone GuideLLM integration
@@ -82,8 +73,6 @@ I've implemented a comprehensive command-line demo system for showcasing vLLM, L
 ./scripts/test_vllm_serving.sh
 
 # Compress a model
-./scripts/compress_model.sh "TinyLlama/TinyLlama-1.1B-Chat-v1.0" "./compressed_models" "W4A16" "GPTQ" 512
-
 # Benchmark
 ./scripts/benchmark_guidellm.sh 100 5 128 128
 ```
@@ -104,8 +93,6 @@ source my_config.env
 ✅ **Your Exact Workflow:**
 1. ✓ Start vLLM server
 2. ✓ Test with curl
-3. ✓ Compress with LLMCompressor
-4. ✓ Load compressed model
 5. ✓ Benchmark with GuideLLM
 
 ✅ **Additional Features:**
@@ -134,16 +121,6 @@ source my_config.env
 - Error detection
 - Success validation
 
-### Compression Script (`compress_model.sh`)
-
-✅ **LLMCompressor Integration:**
-- Support for all quantization formats (W8A8_INT8, W4A16, W8A16, W4A4)
-- Multiple algorithms (GPTQ, AWQ, PTQ, SmoothQuant)
-- Configurable calibration
-- Progress reporting
-- Size estimation
-- vLLM usage instructions
-
 ### Benchmark Script (`benchmark_guidellm.sh`)
 
 ✅ **GuideLLM Integration:**
@@ -155,12 +132,6 @@ source my_config.env
 - Multi-server support
 
 ## 📊 Supported Configurations
-
-### Quantization Formats
-- `W8A8_INT8` - 8-bit balanced
-- `W4A16` - 4-bit high compression
-- `W8A16` - 8-bit good quality
-- `W4A4` - Maximum compression
 
 ### Algorithms
 - `GPTQ` (recommended)
@@ -182,22 +153,6 @@ source my_config.env
 CALIBRATION_SAMPLES=128 BENCHMARK_REQUESTS=50 ./scripts/demo_full_workflow.sh
 ```
 
-### 2. Compare Base vs Compressed
-```bash
-# Benchmark base model
-./scripts/benchmark_guidellm.sh 100 5 128 128
-
-# Compress
-./scripts/compress_model.sh "TinyLlama/TinyLlama-1.1B-Chat-v1.0" "./compressed_models" "W4A16" "GPTQ" 512
-
-# Load compressed & benchmark
-python -m vllm.entrypoints.openai.api_server \
-  --model ./compressed_models/TinyLlama_TinyLlama-1.1B-Chat-v1.0_W4A16 \
-  --quantization gptq &
-sleep 30
-./scripts/benchmark_guidellm.sh 100 5 128 128
-```
-
 ### 3. Manual Step-by-Step (Your Original Idea)
 ```bash
 # 1. Start vLLM
@@ -209,14 +164,9 @@ curl http://localhost:8000/v1/chat/completions \
   -d '{"model": "TinyLlama/TinyLlama-1.1B-Chat-v1.0", "messages": [{"role": "user", "content": "Hello!"}]}'
 
 # 3. Compress
-./scripts/compress_model.sh "TinyLlama/TinyLlama-1.1B-Chat-v1.0" "./compressed_models" "W4A16" "GPTQ" 512
-
 # 4. Load compressed
 pkill -f vllm.entrypoints.openai.api_server
 python -m vllm.entrypoints.openai.api_server \
-  --model ./compressed_models/TinyLlama_TinyLlama-1.1B-Chat-v1.0_W4A16 \
-  --quantization gptq &
-
 # 5. Benchmark
 ./scripts/benchmark_guidellm.sh 100 5 128 128
 ```
@@ -250,9 +200,6 @@ vllm-playground/
 │   ├── README.md                      # Scripts documentation (new)
 │   ├── demo_full_workflow.sh          # Main demo (new)
 │   ├── test_vllm_serving.sh           # Serving tests (new)
-│   ├── compress_model.sh              # Compression (new)
-│   ├── benchmark_guidellm.sh          # Benchmarking (new)
-│   └── run_cpu.sh                     # Existing CPU script
 └── docs/
     ├── CLI_DEMO_GUIDE.md              # Full guide (new)
     └── CLI_QUICK_REFERENCE.md         # Quick reference (new)

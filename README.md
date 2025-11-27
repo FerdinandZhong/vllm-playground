@@ -32,17 +32,21 @@ A modern web interface for managing and interacting with vLLM servers (www.githu
 - **Enterprise Deployment**: OpenShift/Kubernetes with dynamic pod creation
 - **Container Manager**: Automatic lifecycle management with smart reuse
 
-## 🆕 New: Model Compression Support
-
-Built-in LLM-Compressor integration for quantizing and compressing models directly from the UI!
-
-![Model Compression Interface](assets/llmcompressor.png)
-
 ## 📊 New: GuideLLM Benchmarking
 
 Integrated GuideLLM for comprehensive performance benchmarking and analysis. Run load tests and get detailed metrics on throughput, latency, and token generation performance!
 
 ![GuideLLM Benchmark Results](assets/guidellm.png)
+
+## 🔧 Model Compression
+
+**Looking for model compression and quantization?** Check out the separate **[LLMCompressor Playground](https://github.com/micytao/llmcompressor-playground)** project for:
+- Model quantization (INT8, INT4, FP8)
+- GPTQ, AWQ, and SmoothQuant algorithms
+- Built-in compression presets
+- Integration with vLLM
+
+This keeps the vLLM Playground focused on serving and benchmarking, while providing a dedicated tool for model optimization.
 
 ## 📁 Project Structure
 
@@ -108,7 +112,6 @@ vllm-playground/
 │
 ├── assets/                      # Images and assets
 │   ├── vllm-playground.png     # WebUI screenshot
-│   ├── llmcompressor.png       # Model compression UI screenshot
 │   ├── guidellm.png            # GuideLLM benchmark results screenshot
 │   ├── vllm.png                # vLLM logo
 │   └── vllm.jpeg               # vLLM logo (alternate)
@@ -280,7 +283,6 @@ nano config/vllm_cpu.env
   - CPU and GPU mode support
   - RBAC-based security
   - Automated deployment scripts
-- **Model Compression**: LLM-Compressor integration for quantizing and compressing models
 - **Performance Benchmarking**: GuideLLM integration for comprehensive load testing with detailed metrics
   - Request statistics (success rate, duration, avg times)
   - Token throughput analysis (mean/median tokens per second)
@@ -301,7 +303,7 @@ nano config/vllm_cpu.env
 
 ### Getting Started
 - **[Quick Start Guide](docs/QUICKSTART.md)** - Get up and running in minutes
-- **[Command-Line Demo Guide](cli_demo/docs/CLI_DEMO_GUIDE.md)** - Full workflow demo with vLLM, LLMCompressor & GuideLLM
+- **[Command-Line Demo Guide](cli_demo/docs/CLI_DEMO_GUIDE.md)** - Full workflow demo with vLLM & GuideLLM
 - [macOS CPU Setup](docs/MACOS_CPU_GUIDE.md) - Apple Silicon optimization guide
 - [CPU Models Quickstart](docs/CPU_MODELS_QUICKSTART.md) - Best models for CPU
 
@@ -412,6 +414,8 @@ Contributions welcome! Please feel free to submit issues and pull requests.
 - [vLLM Official Documentation](https://docs.vllm.ai/)
 - [vLLM CPU Mode Guide](https://docs.vllm.ai/en/stable/getting_started/installation/cpu.html)
 - [vLLM GitHub](https://github.com/vllm-project/vllm)
+- **[LLMCompressor Playground](https://github.com/micytao/llmcompressor-playground)** - Separate project for model compression and quantization
+- [GuideLLM](https://github.com/neuralmagic/guidellm) - Performance benchmarking tool
 
 ## 🏗️ Architecture Overview
 

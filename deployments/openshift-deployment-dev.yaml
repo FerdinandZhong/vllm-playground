@@ -9,7 +9,6 @@
 # - vLLM (or vllm-cpu-only)
 # - PyTorch
 # - WebUI dependencies (from requirements.txt)
-# - llmcompressor (optional, for model quantization)
 # 
 # Benefits:
 # - Smallest possible image size for fast deployment
@@ -188,7 +187,6 @@ spec:
           mountPath: /workspace
       
       # Volumes for persistent workspace
-      # 80GB minimum for model downloads and llmcompressor operations
       volumes:
       - name: workspace
         persistentVolumeClaim:
@@ -306,7 +304,6 @@ spec:
 # PersistentVolumeClaim for development workspace
 # 80GB minimum for:
 # - Model downloads (models can be 5-50GB each)
-# - llmcompressor operations (requires space for original + compressed models)
 # - Python packages and dependencies
 # - Logs and temporary files
 apiVersion: v1
@@ -382,9 +379,7 @@ data:
        pip3 install --user -r /home/vllm/vllm-playground/requirements.txt
        ```
     
-    6. (Optional) Install llmcompressor for model compression:
        ```bash
-       pip3 install --user llmcompressor
        ```
     
     ## Workspace Layout
@@ -419,19 +414,6 @@ data:
     
     ```bash
     vllm serve <model-name> --host 0.0.0.0 --port 8000
-    ```
-    
-    ## Using llmcompressor
-    
-    ```python
-    from llmcompressor import compress_model
-    
-    # Compress a model
-    compress_model(
-        model_path="<model-name>",
-        output_path="/workspace/compressed_models/<model-name>",
-        compression_config="quantization"
-    )
     ```
     
     ## Tips

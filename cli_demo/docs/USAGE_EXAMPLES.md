@@ -17,9 +17,7 @@ BENCHMARK_REQUESTS=50 \
 **Expected Output:**
 - vLLM server starts in ~20 seconds
 - Chat test completes in ~5 seconds
-- Compression takes ~5-8 minutes
-- Compressed model loads in ~20 seconds
-- Benchmark completes in ~2 minutes
+- - - Benchmark completes in ~2 minutes
 
 **Total time: ~8-12 minutes**
 
@@ -27,11 +25,9 @@ BENCHMARK_REQUESTS=50 \
 
 ## 🎯 Example 2: Full Quality Demo
 
-Complete workflow with high-quality compression:
-
+Complete workflow with high-quality 
 ```bash
-# Use TinyLlama with thorough compression
-BASE_MODEL="TinyLlama/TinyLlama-1.1B-Chat-v1.0" \
+# Use TinyLlama with thorough BASE_MODEL="TinyLlama/TinyLlama-1.1B-Chat-v1.0" \
 QUANTIZATION_FORMAT="W4A16" \
 CALIBRATION_SAMPLES="1024" \
 BENCHMARK_REQUESTS="200" \
@@ -42,62 +38,13 @@ BENCHMARK_REQUESTS="200" \
 
 ---
 
-## 🎯 Example 3: Compare Quantization Formats
-
-Test different compression strategies:
-
-```bash
-#!/bin/bash
-# compare_formats.sh
-
-MODEL="TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-
-# Start base model
-python -m vllm.entrypoints.openai.api_server \
-  --model "$MODEL" \
-  --port 8000 &
-sleep 30
-
-# Benchmark base model
-echo "=== Base Model ===" | tee results.txt
-./scripts/benchmark_guidellm.sh 100 5 128 128 | tee -a results.txt
-
-# Test each format
-for format in W8A8_INT8 W4A16 W8A16; do
-  echo "=== Testing $format ===" | tee -a results.txt
-  
-  # Compress
-  ./scripts/compress_model.sh "$MODEL" "./compressed_models" "$format" "GPTQ" 512
-  
-  # Stop base model
-  pkill -f "vllm.entrypoints.openai.api_server"
-  sleep 5
-  
-  # Start compressed model
-  python -m vllm.entrypoints.openai.api_server \
-    --model "./compressed_models/TinyLlama_TinyLlama-1.1B-Chat-v1.0_${format}" \
-    --quantization gptq \
-    --port 8000 &
-  sleep 30
-  
-  # Benchmark
-  ./scripts/benchmark_guidellm.sh 100 5 128 128 | tee -a results.txt
-done
-
-echo "Results saved to results.txt"
-```
-
----
-
 ## 🎯 Example 4: Load Testing
 
 Stress test your vLLM server:
 
 ```bash
-# Start with compressed model for efficiency
-python -m vllm.entrypoints.openai.api_server \
-  --model ./compressed_models/TinyLlama_TinyLlama-1.1B-Chat-v1.0_W4A16 \
-  --quantization gptq \
+# Start with python -m vllm.entrypoints.openai.api_server \
+  --model ./  --quantization gptq \
   --port 8000 &
 
 sleep 30
@@ -142,8 +89,7 @@ Process multiple models sequentially:
 
 ```bash
 #!/bin/bash
-# batch_compress.sh
-
+# batch_
 MODELS=(
   "facebook/opt-125m"
   "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
@@ -153,11 +99,8 @@ MODELS=(
 for model in "${MODELS[@]}"; do
   echo "Processing: $model"
   
-  # Compress with W4A16
-  ./scripts/compress_model.sh \
-    "$model" \
-    "./compressed_models" \
-    "W4A16" \
+  #   ./scripts/    "$model" \
+        "W4A16" \
     "GPTQ" \
     512
   
@@ -203,7 +146,7 @@ Automate testing in a pipeline:
 set -e  # Exit on error
 
 # Install dependencies
-pip install vllm llmcompressor guidellm
+pip install vllm guidellm
 
 # Start server in background
 python -m vllm.entrypoints.openai.api_server \
@@ -248,8 +191,7 @@ export VLLM_PORT="8000"
 
 ## 🎯 Example 10: Quality Validation
 
-Compare model quality after compression:
-
+Compare model quality after 
 ```bash
 #!/bin/bash
 # quality_test.sh
@@ -288,24 +230,16 @@ for q in "${QUESTIONS[@]}"; do
   echo "" | tee -a quality_results.txt
 done
 
-# Compress
-./scripts/compress_model.sh "$MODEL" "./compressed_models" "W4A16" "GPTQ" 512
-
-# Restart with compressed
-pkill -f "vllm.entrypoints.openai.api_server"
+# ./scripts/# Restart with pkill -f "vllm.entrypoints.openai.api_server"
 sleep 5
-COMPRESSED_PATH="./compressed_models/TinyLlama_TinyLlama-1.1B-Chat-v1.0_W4A16"
 python -m vllm.entrypoints.openai.api_server \
-  --model "$COMPRESSED_PATH" \
-  --quantization gptq \
+  --model "$  --quantization gptq \
   --port 8000 &
 sleep 30
 
-echo "=== Compressed Model Responses ===" | tee -a quality_results.txt
-for q in "${QUESTIONS[@]}"; do
+echo "=== for q in "${QUESTIONS[@]}"; do
   echo "Q: $q" | tee -a quality_results.txt
-  echo "A: $(ask_question "$COMPRESSED_PATH" "$q")" | tee -a quality_results.txt
-  echo "" | tee -a quality_results.txt
+  echo "A: $(ask_question "$  echo "" | tee -a quality_results.txt
 done
 
 echo "Results saved to quality_results.txt"
@@ -322,7 +256,7 @@ Run demo in a container:
 FROM python:3.10
 
 # Install dependencies
-RUN pip install vllm llmcompressor guidellm
+RUN pip install vllm guidellm
 
 # Copy scripts
 COPY scripts/ /app/scripts/
@@ -371,11 +305,9 @@ echo "System stats saved to system_monitor.log"
 ## 📝 Notes
 
 - Adjust `CALIBRATION_SAMPLES` based on time constraints (128=fast, 512=good, 1024=best)
-- Use `W4A16` for maximum compression, `W8A8_INT8` for better quality
-- Monitor memory usage, especially with larger models
+- Use `W4A16` for maximum - Monitor memory usage, especially with larger models
 - Results vary based on hardware - these are example timings
-- Always test compressed model quality before production use
-
+- Always test 
 ---
 
 See `docs/CLI_DEMO_GUIDE.md` for more detailed information.
