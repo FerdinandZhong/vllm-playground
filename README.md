@@ -2,7 +2,22 @@
 
 A modern web interface for managing and interacting with vLLM servers (www.github.com/vllm-project/vllm). Supports both GPU and CPU modes, with special optimizations for macOS Apple Silicon and enterprise deployment on OpenShift/Kubernetes.
 
-![vLLM Playground Interface](assets/vllm-playground.png)
+![vLLM Playground Interface](assets/vllm-playground-newUI.png)
+
+### ✨ New UI Enhancements
+
+- **🎨 Modern Dark Theme**: Sleek, professional interface with improved visual hierarchy and contrast
+- **📊 Real-Time Response Metrics Panel**: Live display of prompt tokens, completion tokens, total tokens, time taken, and tokens/sec
+- **⚡ Throughput Monitoring**: Average prompt throughput and generation throughput metrics (tok/s)
+- **💾 GPU KV Cache Usage**: Real-time GPU KV cache utilization monitoring with warning indicators
+- **🎯 Prefix Cache Hit Rate**: Track prefix caching efficiency for optimized inference
+- **🌓 Dark/Light Mode Toggle**: Switch between dark and light themes with one click
+- **📋 Collapsible Sections**: Expandable panels for Chat Template Reference, System Settings, Tool Calling, and MCP Servers
+- **🖥️ Server Status Indicator**: Visual server status with uptime timer
+- **📝 Command Preview**: View and copy the exact vLLM command before execution
+- **💬 Enhanced Chat Interface**: Improved message bubbles with clear AI/User distinction
+- **📜 Server Logs Panel**: Auto-scrolling logs with save and clear controls
+- **⚡ Quick Messages Dropdown**: Pre-configured message templates for rapid testing
 
 ## 📦 Quick Install via PyPI
 
