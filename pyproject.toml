@@ -54,6 +54,10 @@ dependencies = [
 benchmark = [
     "guidellm>=0.3.1",
 ]
+ray = [
+    "ray[serve,cgraph]>=2.48.0",
+    "pyyaml>=6.0",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
@@ -61,7 +65,7 @@ dev = [
     "ruff>=0.1.0",
 ]
 all = [
-    "vllm-playground[benchmark,dev]",
+    "vllm-playground[benchmark,ray,dev]",
 ]
 
 [project.scripts]
@@ -88,6 +92,8 @@ include = [
     "vllm_playground/**/*.css",
     "vllm_playground/**/*.js",
     "vllm_playground/**/*.json",
+    "vllm_playground/**/*.yaml",
+    "vllm_playground/**/*.md",
     "vllm_playground/**/*.png",
     "vllm_playground/**/*.jpeg",
     "vllm_playground/**/*.jpg",
