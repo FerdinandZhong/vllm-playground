@@ -4154,6 +4154,64 @@ a, button, input, select, textarea, .btn, .nav-item, .panel, .card, .form-contro
     color: var(--text-primary);
 }
 
+/* Tool server status banners */
+.tool-server-warning,
+.tool-server-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    font-size: 0.8rem;
+}
+
+.tool-server-warning {
+    background: rgba(255, 152, 0, 0.15);
+    border: 1px solid rgba(255, 152, 0, 0.3);
+    color: #ff9800;
+}
+
+.tool-server-warning .warning-icon {
+    font-size: 1rem;
+}
+
+.tool-server-status {
+    background: rgba(76, 175, 80, 0.15);
+    border: 1px solid rgba(76, 175, 80, 0.3);
+    color: #4caf50;
+}
+
+.tool-server-status .status-icon {
+    font-size: 0.9rem;
+    font-weight: bold;
+}
+
+#tool-parser-display {
+    font-family: var(--font-mono);
+    font-weight: 600;
+}
+
+/* Disabled state for tool controls when server doesn't support tools */
+.tool-controls-disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* Warning for "required" tool choice */
+.tool-choice-warning {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    font-size: 0.75rem;
+    background: rgba(244, 67, 54, 0.15);
+    border: 1px solid rgba(244, 67, 54, 0.3);
+    color: #f44336;
+}
+
 .tool-choice-row {
     display: flex;
     align-items: flex-end;

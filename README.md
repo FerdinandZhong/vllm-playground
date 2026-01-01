@@ -411,9 +411,12 @@ nano config/vllm_cpu.env
   - **JSON Schema**: Generate valid JSON matching your schema
   - **Grammar (EBNF)**: Define complex output structures
 - **🔧 Tool Calling / Function Calling**: Define custom tools for the model 🆕
+  - Server-side configuration: Enable in Server Configuration panel before starting
+  - Auto-detected parsers: Llama 3.x, Mistral, Hermes, Qwen, Granite, InternLM
   - Create tools with name, description, and parameters
   - Preset tools (Weather, Calculator, Search)
   - Parallel tool calls support
+  - Per-request tool_choice control (none/auto)
 - **🔗 MCP Server Integration**: Model Context Protocol support *(Coming Soon)* 🆕
 - **➕ RAG Support**: Retrieval-Augmented Generation *(Coming Soon)* 🆕
 - **🐳 Container Orchestration**: Automatic vLLM container lifecycle management
@@ -421,6 +424,7 @@ nano config/vllm_cpu.env
   - Enterprise deployment: Kubernetes API-based orchestration
   - Seamless switching between local and cloud environments
   - Smart container reuse (fast restarts with same config)
+  - Unified CLI args: All container images now use same interface as official vLLM 🆕
 - **☸️ OpenShift/Kubernetes Deployment**: Production-ready cloud deployment 🆕
   - Dynamic pod creation via Kubernetes API
   - CPU and GPU mode support
@@ -487,6 +491,32 @@ export VLLM_CPU_KVCACHE_SPACE=40
 export VLLM_CPU_OMP_THREADS_BIND=auto
 ```
 
+### Tool Calling Configuration 🆕
+
+Tool calling enables models to use functions/tools you define. This is a **server-side feature** that must be enabled before starting the server.
+
+**How to Enable:**
+1. Check "Enable Tool Calling" in the **Server Configuration** panel
+2. Select a Tool Call Parser (or leave on "Auto-detect")
+3. Start the server
+4. Define tools in the **Tool Calling** panel (🔧 icon in toolbar)
+
+**Supported Models & Parsers:**
+| Model Family | Parser | Example Models |
+|--------------|--------|----------------|
+| Llama 3.x | `llama3_json` | Llama-3.2-1B-Instruct, Llama-3.1-8B-Instruct |
+| Mistral | `mistral` | Mistral-7B-Instruct-v0.3, Mixtral-8x7B |
+| Hermes | `hermes` | Hermes-2-Pro, Hermes-3 |
+| Qwen | `hermes` | Qwen2.5-7B-Instruct, Qwen2-VL |
+| Granite | `granite-20b-fc` | granite-20b-functioncalling |
+| InternLM | `internlm` | InternLM2.5-7B-Chat |
+
+**Per-Request Options:**
+- **Tool Choice**: `none` (disable) or `auto` (let model decide)
+- **Tools**: Define in the Tool Calling panel
+
+**Note:** Tool calling adds `--enable-auto-tool-choice --tool-call-parser <parser>` to the vLLM startup command.
+
 ### Supported Models
 
 **CPU-Optimized Models (Recommended for macOS):**
@@ -545,14 +575,29 @@ python run.py
 ### Container Development
 
 ```bash
-# Build vLLM service container (macOS/CPU)
-podman build -f containers/Containerfile.mac -t vllm-service:macos .
+# Build vLLM service container (macOS/CPU ARM64)
+podman build -f containers/Containerfile.mac -t vllm-mac:v0.11.0 .
+
+# Build vLLM service container (Linux x86_64 CPU)
+podman build -f containers/Containerfile.cpu -t vllm-cpu:v0.11.0 .
 
 # Build Web UI orchestrator container
 podman build -f containers/Containerfile.vllm-playground -t vllm-playground:latest .
 
 # Build OpenShift Web UI container
 podman build -f openshift/Containerfile -t vllm-playground-webui:latest .
+```
+
+**Container Architecture:**
+All custom container images now use the same CLI argument pattern as the official vLLM image:
+```bash
+# All images accept vLLM CLI args directly
+podman run vllm-mac:v0.11.0 \
+  --model meta-llama/Llama-3.2-1B-Instruct \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --enable-auto-tool-choice \
+  --tool-call-parser llama3_json
 ```
 
 ## 📝 License
@@ -634,7 +679,8 @@ Contributions welcome! Please feel free to submit issues and pull requests.
 
 **Container Images:**
 - **GPU Mode**: Official vLLM image (`vllm/vllm-openai:v0.11.0`)
-- **CPU Mode**: Self-built optimized image (`quay.io/rh_ee_micyang/vllm-service:cpu`)
+- **CPU Mode (Linux x86)**: Self-built optimized image (`quay.io/rh_ee_micyang/vllm-service:cpu`)
+- **CPU Mode (macOS ARM64)**: Self-built optimized image (`quay.io/rh_ee_micyang/vllm-mac:v0.11.0`) 🆕
 
 **Key Features:**
 - Same UI code works in both environments
@@ -690,9 +736,26 @@ podman logs -f vllm-service
 # Stop and remove container
 podman stop vllm-service && podman rm vllm-service
 
-# Pull latest vLLM image
-podman pull quay.io/rh_ee_micyang/vllm-service:macos
+# Pull latest vLLM images
+podman pull quay.io/rh_ee_micyang/vllm-mac:v0.11.0     # macOS ARM64
+podman pull quay.io/rh_ee_micyang/vllm-service:cpu    # Linux x86_64
+podman pull vllm/vllm-openai:v0.11.0                  # GPU (official)
 ```
+
+#### Tool Calling Not Working
+
+Tool calling requires **server-side configuration**. If tools aren't being called:
+
+1. **Verify server was started with tool calling enabled:**
+   - Check "Enable Tool Calling" in Server Configuration BEFORE starting
+   - Look for this in startup logs: `Tool calling enabled with parser: llama3_json`
+
+2. **Verify CLI args are passed:**
+   ```
+   vLLM arguments: --model ... --enable-auto-tool-choice --tool-call-parser llama3_json
+   ```
+
+3. **If using container mode**, ensure the container was started fresh after enabling tool calling (stop and restart if needed)
 
 ### OpenShift/Kubernetes Issues
 

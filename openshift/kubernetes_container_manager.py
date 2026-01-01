@@ -21,7 +21,7 @@ class VLLMKubernetesManager:
     
     POD_NAME = "vllm-service"
     SERVICE_NAME = "vllm-service"
-    DEFAULT_IMAGE = "quay.io/rh_ee_micyang/vllm-service:macos"
+    DEFAULT_IMAGE = "quay.io/rh_ee_micyang/vllm-mac:v0.11.0"
     
     def __init__(self, namespace: Optional[str] = None):
         """

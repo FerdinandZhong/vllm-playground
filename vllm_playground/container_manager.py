@@ -24,7 +24,7 @@ class VLLMContainerManager:
     # Default images for different platforms (must use fully-qualified names for Podman)
     # Override with VLLM_CONTAINER_IMAGE environment variable
     DEFAULT_IMAGE_GPU = "docker.io/vllm/vllm-openai:v0.11.0"  # Official vLLM GPU image (linux/amd64)
-    DEFAULT_IMAGE_CPU_MACOS = "quay.io/rh_ee_micyang/vllm-service:macos"  # CPU image for macOS (linux/arm64)
+    DEFAULT_IMAGE_CPU_MACOS = "quay.io/rh_ee_micyang/vllm-mac:v0.11.0"  # CPU image for macOS (linux/arm64)
     DEFAULT_IMAGE_CPU_X86 = "quay.io/rh_ee_micyang/vllm-service:cpu"  # CPU image for x86_64 Linux
     
     def __init__(self, container_runtime: str = "podman", use_sudo: bool = None):
@@ -59,7 +59,7 @@ class VLLMContainerManager:
         Priority:
         1. VLLM_CONTAINER_IMAGE environment variable (if set)
         2. CPU image based on platform if use_cpu=True:
-           - macOS (ARM64): quay.io/rh_ee_micyang/vllm-service:macos
+           - macOS (ARM64): quay.io/rh_ee_micyang/vllm-mac:v0.11.0
            - Linux x86_64: quay.io/rh_ee_micyang/vllm-service:cpu
         3. GPU image (default): docker.io/vllm/vllm-openai:v0.11.0
         
@@ -119,6 +119,40 @@ class VLLMContainerManager:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, lambda: self._run_podman_cmd(*args, capture_output=capture_output, check=check))
     
+    def _detect_tool_call_parser(self, model_name: str) -> Optional[str]:
+        """
+        Auto-detect the appropriate tool call parser based on model name.
+        
+        Returns the parser name or None if no suitable parser is detected.
+        """
+        model_lower = model_name.lower()
+        
+        # Llama 3.x models (Meta)
+        if any(x in model_lower for x in ['llama-3', 'llama3', 'llama_3']):
+            return 'llama3_json'
+        
+        # Mistral models
+        if 'mistral' in model_lower:
+            return 'mistral'
+        
+        # NousResearch Hermes models
+        if 'hermes' in model_lower:
+            return 'hermes'
+        
+        # InternLM models
+        if 'internlm' in model_lower:
+            return 'internlm'
+        
+        # IBM Granite models
+        if 'granite' in model_lower:
+            return 'granite-20b-fc'
+        
+        # Qwen models
+        if 'qwen' in model_lower:
+            return 'hermes'
+        
+        return None
+    
     def build_container_config(self, vllm_config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Build container configuration from vLLM config
@@ -144,10 +178,21 @@ class VLLMContainerManager:
         else:
             env.extend(["-e", f"VLLM_DTYPE={vllm_config.get('dtype', 'auto')}"])
         
-        # Max model length - only set if user explicitly configures it
+        # Max model length - set default for CPU mode to avoid memory issues
         max_model_len = vllm_config.get('max_model_len')
         if max_model_len:
             env.extend(["-e", f"VLLM_MAX_MODEL_LEN={max_model_len}"])
+            env.extend(["-e", f"VLLM_MAX_NUM_BATCHED_TOKENS={max_model_len}"])
+        elif vllm_config.get('use_cpu', False):
+            # CPU mode: Use conservative default (2048) to avoid memory issues
+            env.extend(["-e", "VLLM_MAX_MODEL_LEN=2048"])
+            env.extend(["-e", "VLLM_MAX_NUM_BATCHED_TOKENS=2048"])
+            logger.info("Using default max_model_len=2048 for CPU mode")
+        else:
+            # GPU mode: Use reasonable default (8192)
+            env.extend(["-e", "VLLM_MAX_MODEL_LEN=8192"])
+            env.extend(["-e", "VLLM_MAX_NUM_BATCHED_TOKENS=8192"])
+            logger.info("Using default max_model_len=8192 for GPU mode")
         
         # Trust remote code
         if vllm_config.get('trust_remote_code', False):
@@ -174,6 +219,19 @@ class VLLMContainerManager:
             env.extend(["-e", f"VLLM_TENSOR_PARALLEL_SIZE={vllm_config.get('tensor_parallel_size', 1)}"])
             env.extend(["-e", f"VLLM_GPU_MEMORY_UTILIZATION={vllm_config.get('gpu_memory_utilization', 0.9)}"])
             env.extend(["-e", f"VLLM_LOAD_FORMAT={vllm_config.get('load_format', 'auto')}"])
+        
+        # Tool calling support - add environment variables for custom images
+        if vllm_config.get('enable_tool_calling', False):
+            tool_parser = vllm_config.get('tool_call_parser')
+            model_source = vllm_config.get('model_source', vllm_config.get('model'))
+            if not tool_parser:
+                # Auto-detect based on model name
+                tool_parser = self._detect_tool_call_parser(model_source)
+            
+            if tool_parser:
+                env.extend(["-e", "VLLM_ENABLE_AUTO_TOOL_CHOICE=true"])
+                env.extend(["-e", f"VLLM_TOOL_CALL_PARSER={tool_parser}"])
+                logger.info(f"Tool calling env vars set: parser={tool_parser}")
         
         # Setup volumes
         volumes = []
@@ -219,20 +277,55 @@ class VLLMContainerManager:
         else:
             vllm_args.extend(["--dtype", vllm_config.get('dtype', 'auto')])
         
-        # Max model length - only set if user explicitly configures it
-        # Otherwise let vLLM auto-detect from model config
+        # Max model length and max_num_batched_tokens
+        # These must be consistent: max_num_batched_tokens >= max_model_len
         max_model_len = vllm_config.get('max_model_len')
         if max_model_len:
             vllm_args.extend(["--max-model-len", str(max_model_len)])
+            vllm_args.extend(["--max-num-batched-tokens", str(max_model_len)])
+        elif vllm_config.get('use_cpu', False):
+            # CPU mode: Use conservative default to avoid memory issues
+            # Many models default to very large context (131072) which exceeds CPU memory
+            vllm_args.extend(["--max-model-len", "4096"])
+            vllm_args.extend(["--max-num-batched-tokens", "4096"])
+            logger.info("Using default max-model-len=4096 for CPU mode")
         
         # Trust remote code
         if vllm_config.get('trust_remote_code', False):
             vllm_args.append("--trust-remote-code")
         
+        # Custom chat template
+        if vllm_config.get('custom_chat_template'):
+            vllm_args.extend(["--chat-template", "/tmp/chat_template.jinja"])
+        
         # GPU-specific parameters
         if not vllm_config.get('use_cpu', False):
             vllm_args.extend(["--tensor-parallel-size", str(vllm_config.get('tensor_parallel_size', 1))])
             vllm_args.extend(["--gpu-memory-utilization", str(vllm_config.get('gpu_memory_utilization', 0.9))])
+            # Load format (auto, pt, safetensors, etc.)
+            load_format = vllm_config.get('load_format', 'auto')
+            if load_format and load_format != 'auto':
+                vllm_args.extend(["--load-format", load_format])
+        
+        # Tool calling support
+        enable_tool_calling = vllm_config.get('enable_tool_calling', False)
+        logger.info(f"Tool calling config: enable_tool_calling={enable_tool_calling}, tool_call_parser={vllm_config.get('tool_call_parser')}")
+        
+        if enable_tool_calling:
+            tool_parser = vllm_config.get('tool_call_parser')
+            if not tool_parser:
+                # Auto-detect based on model name
+                tool_parser = self._detect_tool_call_parser(model_source)
+                logger.info(f"Auto-detected tool parser for '{model_source}': {tool_parser}")
+            
+            if tool_parser:
+                vllm_args.append("--enable-auto-tool-choice")
+                vllm_args.extend(["--tool-call-parser", tool_parser])
+                logger.info(f"Tool calling enabled with parser: {tool_parser}")
+            else:
+                logger.warning(f"Tool calling enabled but no parser found for model: {model_source}")
+        else:
+            logger.info("Tool calling disabled in config")
         
         return {
             'environment': env,
@@ -512,10 +605,12 @@ class VLLMContainerManager:
             # Add image
             podman_cmd.append(image)
             
-            # Add vLLM command-line arguments (required for official vllm-openai image)
-            podman_cmd.extend(config['vllm_args'])
-            
-            logger.info(f"vLLM arguments: {' '.join(config['vllm_args'])}")
+            # Add vLLM command-line arguments
+            # Both official vllm-openai image and our custom images now support CLI args
+            # (Custom images use entrypoint.sh that passes through all arguments)
+            if config.get('vllm_args'):
+                podman_cmd.extend(config['vllm_args'])
+                logger.info(f"vLLM arguments: {' '.join(config['vllm_args'])}")
             
             # Run container
             result = await self._run_podman_cmd_async(*podman_cmd)

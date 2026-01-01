@@ -96,7 +96,9 @@ class VLLMWebUI {
             maxModelLen: document.getElementById('max-model-len'),
             trustRemoteCode: document.getElementById('trust-remote-code'),
             enablePrefixCaching: document.getElementById('enable-prefix-caching'),
-            disableLogStats: document.getElementById('disable-log-stats'),
+            enableToolCalling: document.getElementById('enable-tool-calling'),
+            toolCallParser: document.getElementById('tool-call-parser'),
+            toolParserGroup: document.getElementById('tool-parser-group'),
             
             // Template Settings
             templateSettingsToggle: document.getElementById('template-settings-toggle'),
@@ -200,6 +202,12 @@ class VLLMWebUI {
             toolChoice: document.getElementById('tool-choice'),
             parallelToolCalls: document.getElementById('parallel-tool-calls'),
             toolsList: document.getElementById('tools-list'),
+            toolServerWarning: document.getElementById('tool-server-warning'),
+            toolServerStatus: document.getElementById('tool-server-status'),
+            toolParserDisplay: document.getElementById('tool-parser-display'),
+            toolChoiceRow: document.querySelector('.tool-choice-row'),
+            toolPresetsRow: document.querySelector('.tool-presets-row'),
+            toolsListContainer: document.querySelector('.tools-list-container'),
             addToolBtn: document.getElementById('add-tool-btn'),
             clearToolsBtn: document.getElementById('clear-tools-btn'),
             toolEditorModal: document.getElementById('tool-editor-modal'),
@@ -1098,13 +1106,20 @@ number ::= [0-9]+`
             this.elements.hfToken,
             this.elements.trustRemoteCode,
             this.elements.enablePrefixCaching,
-            this.elements.disableLogStats
+            this.elements.enableToolCalling,
+            this.elements.toolCallParser
         ];
         
         configElements.forEach(element => {
             element.addEventListener('input', () => this.updateCommandPreview());
             element.addEventListener('change', () => this.updateCommandPreview());
         });
+        
+        // Toggle tool parser visibility based on enable tool calling checkbox
+        this.elements.enableToolCalling.addEventListener('change', () => {
+            this.updateToolParserVisibility();
+        });
+        this.updateToolParserVisibility(); // Initial state
         
         // Copy command button
         this.elements.copyCommandBtn.addEventListener('click', () => this.copyCommand());
@@ -1144,10 +1159,12 @@ number ::= [0-9]+`
         this.elements.modelSelect.addEventListener('change', () => {
             this.updateTemplateForModel();
             this.optimizeSettingsForModel();
+            this.updateToolPanelStatus();  // Update tool parser display
         });
         this.elements.customModel.addEventListener('blur', () => {
             this.updateTemplateForModel();
             this.optimizeSettingsForModel();
+            this.updateToolPanelStatus();  // Update tool parser display
         });
     }
 
@@ -1760,10 +1777,11 @@ number ::= [0-9]+`
             run_mode: runMode,  // Add run_mode to config
             trust_remote_code: this.elements.trustRemoteCode.checked,
             enable_prefix_caching: this.elements.enablePrefixCaching.checked,
-            disable_log_stats: this.elements.disableLogStats.checked,
             use_cpu: isCpuMode,
             hf_token: hfToken || null,  // Include HF token for gated models
-            local_model_path: isLocalModel && localModelPath ? localModelPath : null  // Add local model path
+            local_model_path: isLocalModel && localModelPath ? localModelPath : null,  // Add local model path
+            enable_tool_calling: this.elements.enableToolCalling.checked,
+            tool_call_parser: this.elements.toolCallParser.value || null  // null = auto-detect
         };
         
         // Don't send chat template or stop tokens - let vLLM auto-detect them
@@ -1989,6 +2007,7 @@ number ::= [0-9]+`
             };
             
             // Add tools if configured
+            console.log('=== sendMessage: toolsConfig ===', toolsConfig);
             if (toolsConfig.tools) {
                 requestBody.tools = toolsConfig.tools;
                 if (toolsConfig.tool_choice) {
@@ -1997,6 +2016,9 @@ number ::= [0-9]+`
                 if (toolsConfig.parallel_tool_calls !== null) {
                     requestBody.parallel_tool_calls = toolsConfig.parallel_tool_calls;
                 }
+                console.log('Tools added to request:', requestBody.tools?.length, 'tools, choice:', requestBody.tool_choice);
+            } else {
+                console.log('No tools added to request (toolsConfig.tools is null/undefined)');
             }
             
             // Add structured outputs if configured
@@ -2677,6 +2699,76 @@ number ::= [0-9]+`
         }
     }
 
+    updateToolParserVisibility() {
+        // Show/hide the tool parser dropdown based on enable tool calling checkbox
+        if (this.elements.toolParserGroup) {
+            this.elements.toolParserGroup.style.display = 
+                this.elements.enableToolCalling.checked ? 'block' : 'none';
+        }
+        // Also update the tool panel status
+        this.updateToolPanelStatus();
+    }
+    
+    updateToolPanelStatus() {
+        // Update the Tool Calling panel to reflect server configuration
+        const toolCallingEnabled = this.elements.enableToolCalling?.checked ?? true;
+        
+        // Get the effective parser (auto-detect if not set)
+        let parser = this.elements.toolCallParser?.value || '';
+        if (!parser && toolCallingEnabled) {
+            // Auto-detect based on model name
+            const model = (this.elements.customModel?.value.trim() || this.elements.modelSelect?.value || '').toLowerCase();
+            if (model.includes('llama-3') || model.includes('llama3') || model.includes('llama_3')) {
+                parser = 'llama3_json';
+            } else if (model.includes('mistral')) {
+                parser = 'mistral';
+            } else if (model.includes('hermes') || model.includes('qwen')) {
+                parser = 'hermes';
+            } else if (model.includes('internlm')) {
+                parser = 'internlm';
+            } else if (model.includes('granite')) {
+                parser = 'granite-20b-fc';
+            }
+        }
+        
+        // Update warning/status banners
+        if (this.elements.toolServerWarning) {
+            this.elements.toolServerWarning.style.display = toolCallingEnabled ? 'none' : 'flex';
+        }
+        if (this.elements.toolServerStatus) {
+            if (toolCallingEnabled && parser) {
+                this.elements.toolServerStatus.style.display = 'flex';
+                if (this.elements.toolParserDisplay) {
+                    this.elements.toolParserDisplay.textContent = parser;
+                }
+            } else {
+                this.elements.toolServerStatus.style.display = 'none';
+            }
+        }
+        
+        // Disable/enable tool controls based on server support
+        const controlElements = [
+            this.elements.toolChoiceRow,
+            this.elements.toolPresetsRow,
+            this.elements.toolsListContainer
+        ];
+        
+        controlElements.forEach(el => {
+            if (el) {
+                if (toolCallingEnabled && parser) {
+                    el.classList.remove('tool-controls-disabled');
+                } else {
+                    el.classList.add('tool-controls-disabled');
+                }
+            }
+        });
+        
+        // Update tool choice dropdown - if server doesn't support, set to None
+        if (!toolCallingEnabled && this.elements.toolChoice) {
+            this.elements.toolChoice.value = '';
+        }
+    }
+
     updateCommandPreview() {
         const model = this.elements.customModel.value.trim() || this.elements.modelSelect.value;
         const host = this.elements.host.value;
@@ -2685,7 +2777,6 @@ number ::= [0-9]+`
         const maxModelLen = this.elements.maxModelLen.value;
         const trustRemoteCode = this.elements.trustRemoteCode.checked;
         const enablePrefixCaching = this.elements.enablePrefixCaching.checked;
-        const disableLogStats = this.elements.disableLogStats.checked;
         const isCpuMode = this.elements.modeCpu.checked;
         const hfToken = this.elements.hfToken.value.trim();
         
@@ -2759,8 +2850,33 @@ number ::= [0-9]+`
             cmd += ` \\\n  --enable-prefix-caching`;
         }
         
-        if (disableLogStats) {
-            cmd += ` \\\n  --disable-log-stats`;
+        // Tool calling flags
+        const enableToolCalling = this.elements.enableToolCalling.checked;
+        const toolCallParser = this.elements.toolCallParser.value;
+        
+        if (enableToolCalling) {
+            // Determine parser (auto-detect based on model name if not explicitly set)
+            let parser = toolCallParser;
+            if (!parser) {
+                // Auto-detect based on model name
+                const modelLower = model.toLowerCase();
+                if (modelLower.includes('llama-3') || modelLower.includes('llama3') || modelLower.includes('llama_3')) {
+                    parser = 'llama3_json';
+                } else if (modelLower.includes('mistral')) {
+                    parser = 'mistral';
+                } else if (modelLower.includes('hermes') || modelLower.includes('qwen')) {
+                    parser = 'hermes';
+                } else if (modelLower.includes('internlm')) {
+                    parser = 'internlm';
+                } else if (modelLower.includes('granite')) {
+                    parser = 'granite-20b-fc';
+                }
+            }
+            
+            if (parser) {
+                cmd += ` \\\n  --enable-auto-tool-choice`;
+                cmd += ` \\\n  --tool-call-parser ${parser}`;
+            }
         }
         
         // Add chat template flag (vLLM requires this for /v1/chat/completions)
@@ -5029,15 +5145,33 @@ number ::= [0-9]+`
         // Return tools array for API request, or null if empty/disabled
         const toolChoice = this.elements.toolChoice?.value || '';
         
-        if (toolChoice === '' || this.tools.length === 0) {
+        // Debug logging
+        console.log('=== getToolsForRequest DEBUG ===');
+        console.log('toolChoice dropdown value:', JSON.stringify(toolChoice));
+        console.log('this.tools.length:', this.tools.length);
+        console.log('this.tools:', JSON.stringify(this.tools.map(t => t.function?.name)));
+        
+        // If tool choice is empty (None), don't send tools
+        if (toolChoice === '') {
+            console.log('Result: tool_choice is empty, returning null');
             return { tools: null, tool_choice: null, parallel_tool_calls: null };
         }
         
-        return {
+        // If tool choice is set but no tools defined, warn the user
+        if (this.tools.length === 0) {
+            console.warn(`Tool choice "${toolChoice}" selected but no tools defined - ignoring tool settings`);
+            this.showNotification('⚠️ Tool choice is set to "Auto" but no tools are defined. Add tools using the + button or presets.', 'warning', 5000);
+            return { tools: null, tool_choice: null, parallel_tool_calls: null };
+        }
+        
+        const result = {
             tools: this.tools,
             tool_choice: toolChoice,
             parallel_tool_calls: this.elements.parallelToolCalls?.checked || null
         };
+        console.log('Result: returning tools config:', result.tool_choice, 'with', result.tools.length, 'tools');
+        
+        return result;
     }
     
     formatToolCallMessage(toolCalls) {

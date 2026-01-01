@@ -89,6 +89,51 @@ class VLLMConfig(BaseModel):
     run_mode: Literal["subprocess", "container"] = "subprocess"
     # GPU device selection for subprocess mode (e.g., "0", "1", "0,1" for multi-GPU)
     gpu_device: Optional[str] = None
+    # Tool calling support - enables function calling with compatible models
+    # Requires vLLM server to be started with --enable-auto-tool-choice and --tool-call-parser
+    enable_tool_calling: bool = False  # Disabled by default (can cause issues with some models)
+    # Tool call parser: auto-detects based on model name, or specify explicitly
+    # Options: llama3_json (Llama 3.x), mistral (Mistral), hermes (NousResearch Hermes),
+    #          internlm (InternLM), granite-20b-fc (IBM Granite), pythonic (experimental)
+    tool_call_parser: Optional[str] = None  # None = auto-detect based on model name
+
+
+def detect_tool_call_parser(model_name: str) -> Optional[str]:
+    """
+    Auto-detect the appropriate tool call parser based on model name.
+    
+    Returns the parser name or None if no suitable parser is detected.
+    In that case, tool calling will be disabled.
+    """
+    model_lower = model_name.lower()
+    
+    # Llama 3.x models (Meta)
+    if any(x in model_lower for x in ['llama-3', 'llama3', 'llama_3']):
+        return 'llama3_json'
+    
+    # Mistral models
+    if 'mistral' in model_lower:
+        return 'mistral'
+    
+    # NousResearch Hermes models
+    if 'hermes' in model_lower:
+        return 'hermes'
+    
+    # InternLM models
+    if 'internlm' in model_lower:
+        return 'internlm'
+    
+    # IBM Granite models
+    if 'granite' in model_lower:
+        return 'granite-20b-fc'
+    
+    # Qwen models
+    if 'qwen' in model_lower:
+        return 'hermes'  # Qwen typically uses Hermes-style tool calling
+    
+    # Default: return None (tool calling won't be enabled for unknown models)
+    # User can explicitly set tool_call_parser in config
+    return None
 
 
 class ToolFunction(BaseModel):
@@ -1023,6 +1068,25 @@ async def start_server(config: VLLMConfig):
             await broadcast_log(f"[WEBUI] Trusting vLLM to auto-detect chat template from tokenizer_config.json")
             await broadcast_log(f"[WEBUI] vLLM will use model's built-in chat template automatically")
         
+        # Tool calling support
+        # Add --enable-auto-tool-choice and --tool-call-parser for function calling
+        if config.enable_tool_calling:
+            # Determine the tool call parser
+            tool_parser = config.tool_call_parser
+            if not tool_parser:
+                # Auto-detect based on model name
+                tool_parser = detect_tool_call_parser(model_source)
+            
+            if tool_parser:
+                cmd.append("--enable-auto-tool-choice")
+                cmd.extend(["--tool-call-parser", tool_parser])
+                await broadcast_log(f"[WEBUI] 🔧 Tool calling enabled with parser: {tool_parser}")
+            else:
+                await broadcast_log(f"[WEBUI] ⚠️ Tool calling requested but no parser detected for model")
+                await broadcast_log(f"[WEBUI] Set tool_call_parser explicitly or use a supported model (Llama 3.x, Mistral, etc.)")
+        else:
+            await broadcast_log(f"[WEBUI] Tool calling disabled")
+        
         # Start server based on mode
         if config.run_mode == "container":
             await broadcast_log(f"[WEBUI] Starting vLLM container...")
@@ -1047,8 +1111,12 @@ async def start_server(config: VLLMConfig):
                 'cpu_kvcache_space': config.cpu_kvcache_space,
                 'cpu_omp_threads_bind': config.cpu_omp_threads_bind,
                 'custom_chat_template': config.custom_chat_template,
-                'local_model_path': config.local_model_path
+                'local_model_path': config.local_model_path,
+                'enable_tool_calling': config.enable_tool_calling,
+                'tool_call_parser': config.tool_call_parser
             }
+            
+            logger.info(f"Container config: enable_tool_calling={config.enable_tool_calling}, tool_call_parser={config.tool_call_parser}")
             
             # Start container
             container_info = await container_manager.start_container(vllm_config_dict)
@@ -1519,17 +1587,26 @@ async def chat(request: ChatRequestWithStopTokens):
         
         # Add tool_choice if provided
         if request.tool_choice is not None:
-            if isinstance(request.tool_choice, str):
-                # String values: "auto", "none", "required"
-                payload["tool_choice"] = request.tool_choice
-                logger.info(f"🔧 Tool choice: {request.tool_choice}")
+            # Validate: tool_choice requires tools to be defined
+            if not request.tools or len(request.tools) == 0:
+                logger.warning(f"⚠️ tool_choice '{request.tool_choice}' provided but no tools defined - ignoring")
             else:
-                # Specific tool choice object
-                payload["tool_choice"] = {
-                    "type": request.tool_choice.type,
-                    "function": request.tool_choice.function
-                }
-                logger.info(f"🔧 Tool choice: specific function - {request.tool_choice.function}")
+                if isinstance(request.tool_choice, str):
+                    # String values: "auto", "none"
+                    # Note: "required" is disabled as it can crash vLLM servers
+                    if request.tool_choice == "required":
+                        logger.warning(f"⚠️ tool_choice 'required' is disabled (can crash server) - using 'auto' instead")
+                        payload["tool_choice"] = "auto"
+                    else:
+                        payload["tool_choice"] = request.tool_choice
+                    logger.info(f"🔧 Tool choice: {payload.get('tool_choice', request.tool_choice)}")
+                else:
+                    # Specific tool choice object
+                    payload["tool_choice"] = {
+                        "type": request.tool_choice.type,
+                        "function": request.tool_choice.function
+                    }
+                    logger.info(f"🔧 Tool choice: specific function - {request.tool_choice.function}")
         
         # Add parallel_tool_calls if provided
         if request.parallel_tool_calls is not None:

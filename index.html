@@ -311,11 +311,26 @@
                                 </label>
                             </div>
 
+                            <!-- Tool Calling Server Settings -->
                             <div class="form-group checkbox-group">
                                 <label>
-                                    <input type="checkbox" id="disable-log-stats">
-                                    <span>Disable Log Stats</span>
+                                    <input type="checkbox" id="enable-tool-calling">
+                                    <span>Enable Tool Calling</span>
                                 </label>
+                            </div>
+
+                            <div class="form-group" id="tool-parser-group">
+                                <label>Tool Call Parser</label>
+                                <select id="tool-call-parser" class="form-control">
+                                    <option value="">Auto-detect</option>
+                                    <option value="llama3_json">Llama 3.x (llama3_json)</option>
+                                    <option value="mistral">Mistral</option>
+                                    <option value="hermes">Hermes / Qwen</option>
+                                    <option value="internlm">InternLM</option>
+                                    <option value="granite-20b-fc">IBM Granite</option>
+                                    <option value="pythonic">Pythonic (experimental)</option>
+                                </select>
+                                <small class="form-hint">Parser for model tool call output. Auto-detect uses model name.</small>
                             </div>
 
                             <!-- Command Preview Section -->
@@ -489,13 +504,21 @@
                                             <button class="inline-panel-close" data-panel="tools">✕</button>
                                         </div>
                                         <div class="inline-panel-content inline-panel-scrollable">
+                                            <!-- Server tool calling status banner -->
+                                            <div id="tool-server-warning" class="tool-server-warning" style="display: none;">
+                                                <span class="warning-icon">⚠️</span>
+                                                <span class="warning-text">Tool calling is disabled on the server. Enable it in Server Configuration and restart.</span>
+                                            </div>
+                                            <div id="tool-server-status" class="tool-server-status" style="display: none;">
+                                                <span class="status-icon">✓</span>
+                                                <span class="status-text">Server ready for tool calling (<span id="tool-parser-display">auto</span>)</span>
+                                            </div>
                                             <div class="tool-choice-row">
                                                 <div class="form-group" style="flex: 1;">
                                                     <label>Tool Choice:</label>
                                                     <select id="tool-choice" class="form-control">
-                                                        <option value="">None (disabled)</option>
-                                                        <option value="auto">Auto (model decides)</option>
-                                                        <option value="required">Required (must use)</option>
+                                                        <option value="">None</option>
+                                                        <option value="auto" selected>Auto (recommended)</option>
                                                     </select>
                                                 </div>
                                                 <div class="form-group checkbox-group">

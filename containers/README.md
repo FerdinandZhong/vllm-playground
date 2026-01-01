@@ -74,7 +74,7 @@ podman push quay.io/yourusername/vllm-service:cpu
 
 ### Build macOS vLLM Service Image
 ```bash
-podman build -f containers/Containerfile.mac -t vllm-service:macos .
+podman build -f containers/Containerfile.mac -t vllm-mac:v0.11.0 .
 ```
 
 ### Build Web UI Orchestrator (Local)
@@ -120,7 +120,7 @@ See [../openshift/README.md](../openshift/README.md) and [../openshift/QUICK_STA
 | Web UI (OpenShift) | `quay.io/rh_ee_micyang/vllm-playground:0.2` | ✅ Yes | ❌ None |
 | vLLM GPU | `vllm/vllm-openai:v0.11.0` | ✅ Yes | ❌ None |
 | vLLM CPU | `quay.io/rh_ee_micyang/vllm-service:cpu` | ✅ Yes | ❌ None |
-| vLLM macOS | Local build only | N/A | N/A |
+| vLLM macOS | `quay.io/rh_ee_micyang/vllm-mac:v0.11.0` | ✅ Yes | ❌ None |
 
 **Note:** All container images used in production are publicly accessible. No registry authentication or pull secrets are required.
 
