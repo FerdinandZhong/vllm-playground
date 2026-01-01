@@ -2313,16 +2313,23 @@ number ::= [0-9]+`
                         
                         if (finishReason === 'tool_calls') {
                             // Model tried to use tools but we didn't capture the data
-                            errorMsg += `\n⚠️ Model attempted tool call but data wasn't captured.\n`;
-                            errorMsg += `This may be a streaming format issue.\n\n`;
-                            errorMsg += `Debug info in browser console (F12).\n`;
-                            errorMsg += `Look for: "Raw chunks" to see actual response.`;
+                            // This usually means the model generated malformed JSON that vLLM couldn't parse
+                            errorMsg += `\n❌ Model generated invalid tool call format.\n\n`;
+                            errorMsg += `The model tried to call a tool but produced malformed JSON.\n`;
+                            errorMsg += `vLLM's parser couldn't extract the tool call data.\n\n`;
+                            errorMsg += `Common causes:\n`;
+                            errorMsg += `• Model too small (1B-3B often fail at tool calling)\n`;
+                            errorMsg += `• Model not trained for function calling\n\n`;
+                            errorMsg += `Solutions:\n`;
+                            errorMsg += `• Use a larger model (8B+ recommended)\n`;
+                            errorMsg += `• Try: Llama-3.1-8B-Instruct, Mistral-7B-Instruct\n`;
+                            errorMsg += `• Or disable tools (set tool_choice to "none")`;
                             
                             // Log detailed debug info
-                            console.error('🔧 TOOL CALL DEBUG:');
-                            console.error('  Finish reason:', finishReason);
-                            console.error('  Pending tool calls:', this.pendingToolCalls);
-                            console.error('  Has partial tool call:', hasPartialToolCall);
+                            console.error('🔧 TOOL CALL PARSE FAILURE:');
+                            console.error('  The model generated finish_reason="tool_calls" but no tool_calls data was returned.');
+                            console.error('  This indicates vLLM\'s llama_tool_parser failed to extract the tool call.');
+                            console.error('  Check server logs for: "Error in extracting tool call from response"');
                             console.error('  Raw chunks:', JSON.stringify(rawChunks, null, 2));
                         } else if (hasPartialToolCall) {
                             errorMsg += `\nPartial tool call detected but may be malformed.\n`;
