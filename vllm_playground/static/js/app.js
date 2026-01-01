@@ -2048,6 +2048,10 @@ number ::= [0-9]+`
             
             console.log('Starting to read streaming response...');
             
+            // Track raw response data for debugging tool call failures
+            let rawChunks = [];
+            let toolsWereRequested = requestBody.tools && requestBody.tools.length > 0;
+            
             while (true) {
                 const {done, value} = await reader.read();
                 
@@ -2071,6 +2075,11 @@ number ::= [0-9]+`
                         
                         try {
                             const parsed = JSON.parse(data);
+                            
+                            // Store raw chunks for debugging
+                            if (toolsWereRequested) {
+                                rawChunks.push(parsed);
+                            }
                             
                             if (parsed.choices && parsed.choices.length > 0) {
                                 // Handle OpenAI-compatible chat completions endpoint format
@@ -2154,6 +2163,11 @@ number ::= [0-9]+`
                 }
             }
             
+            // Debug: Log raw chunks if tools were requested but no tool calls captured
+            if (toolsWereRequested && (!this.pendingToolCalls || this.pendingToolCalls.length === 0)) {
+                console.warn('⚠️ Tools were requested but no tool_calls in response. Raw chunks:', rawChunks);
+            }
+            
             console.log('Finalizing response, fullText length:', fullText.length);
             console.log('Usage data:', usageData);
             
@@ -2195,7 +2209,45 @@ number ::= [0-9]+`
                     this.chatHistory.push({role: 'assistant', content: fullText});
                 }
             } else {
-                textSpan.textContent = 'No response from model';
+                // No content and no tool calls - show detailed error
+                if (toolsWereRequested) {
+                    // Tools were sent but model didn't respond properly
+                    const toolChoice = requestBody.tool_choice || 'auto';
+                    let errorMsg = `⚠️ Tool calling failed (tool_choice: "${toolChoice}")\n\n`;
+                    
+                    if (rawChunks.length > 0) {
+                        // Show what the model actually returned
+                        const lastChunk = rawChunks[rawChunks.length - 1];
+                        const finishReason = lastChunk?.choices?.[0]?.finish_reason || 'unknown';
+                        errorMsg += `Finish reason: ${finishReason}\n`;
+                        
+                        // Check if there's a partial tool call that wasn't captured
+                        const hasPartialToolCall = rawChunks.some(c => 
+                            c?.choices?.[0]?.delta?.tool_calls || 
+                            c?.choices?.[0]?.message?.tool_calls
+                        );
+                        
+                        if (hasPartialToolCall) {
+                            errorMsg += `\nPartial tool call detected but may be malformed.\n`;
+                            errorMsg += `Check browser console for raw response data.`;
+                        } else {
+                            errorMsg += `\nModel didn't generate a tool call.\n`;
+                            errorMsg += `This often happens with smaller models (1B-3B).\n\n`;
+                            errorMsg += `Try:\n`;
+                            errorMsg += `• Set tool_choice to "none" for text response\n`;
+                            errorMsg += `• Use a larger model (8B+) for better tool calling`;
+                        }
+                    } else {
+                        errorMsg += `No response chunks received.\n`;
+                        errorMsg += `Check server logs for errors.`;
+                    }
+                    
+                    textSpan.textContent = errorMsg;
+                    textSpan.style.whiteSpace = 'pre-wrap';
+                    console.error('Tool calling failed. Raw chunks:', rawChunks);
+                } else {
+                    textSpan.textContent = 'No response from model';
+                }
                 assistantMessageDiv.classList.add('error');
             }
             

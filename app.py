@@ -646,7 +646,11 @@ async def debug_connection():
             debug_info["url_would_use"] = url
             debug_info["connection_mode"] = "kubernetes_service"
         else:
-            url = f"http://{current_config.host}:{current_config.port}/v1/chat/completions"
+            # Use localhost for container mode since 0.0.0.0 is a bind address, not a valid destination
+            if current_run_mode == "container":
+                url = f"http://localhost:{current_config.port}/v1/chat/completions"
+            else:
+                url = f"http://{current_config.host}:{current_config.port}/v1/chat/completions"
             debug_info["url_would_use"] = url
             debug_info["connection_mode"] = "localhost"
     
@@ -675,7 +679,11 @@ async def test_vllm_connection():
         namespace = getattr(container_manager, 'namespace', os.getenv('KUBERNETES_NAMESPACE', 'default'))
         base_url = f"http://{service_name}.{namespace}.svc.cluster.local:{current_config.port}"
     else:
-        base_url = f"http://{current_config.host}:{current_config.port}"
+        # Use localhost for container mode since 0.0.0.0 is a bind address, not a valid destination
+        if current_run_mode == "container":
+            base_url = f"http://localhost:{current_config.port}"
+        else:
+            base_url = f"http://{current_config.host}:{current_config.port}"
     
     health_url = f"{base_url}/health"
     
@@ -1524,8 +1532,12 @@ async def chat(request: ChatRequestWithStopTokens):
             logger.info(f"  Port: {current_config.port}")
         else:
             # Subprocess mode or local container mode - connect to localhost
-            url = f"http://{current_config.host}:{current_config.port}/v1/chat/completions"
-            logger.info(f"✓ Using localhost URL: {url}")
+            # Use localhost for container mode since 0.0.0.0 is a bind address, not a valid destination
+            if current_run_mode == "container":
+                url = f"http://localhost:{current_config.port}/v1/chat/completions"
+            else:
+                url = f"http://{current_config.host}:{current_config.port}/v1/chat/completions"
+            logger.info(f"✓ Using URL: {url}")
         
         logger.info(f"=====================================")
         
@@ -2111,8 +2123,12 @@ async def completion(request: CompletionRequest):
             logger.info(f"Using Kubernetes service URL: {url}")
         else:
             # Subprocess mode or local container mode - connect to localhost
-            url = f"http://{current_config.host}:{current_config.port}/v1/completions"
-            logger.info(f"Using localhost URL: {url}")
+            # Use localhost for container mode since 0.0.0.0 is a bind address, not a valid destination
+            if current_run_mode == "container":
+                url = f"http://localhost:{current_config.port}/v1/completions"
+            else:
+                url = f"http://{current_config.host}:{current_config.port}/v1/completions"
+            logger.info(f"Using URL: {url}")
         
         payload = {
             "model": current_model_identifier if current_model_identifier else current_config.model,
@@ -2905,7 +2921,11 @@ async def get_vllm_metrics():
             metrics_url = f"http://{service_name}.{namespace}.svc.cluster.local:{current_config.port}/metrics"
         else:
             # Subprocess mode or local container mode - connect to localhost
-            metrics_url = f"http://{current_config.host}:{current_config.port}/metrics"
+            # Use localhost for container mode since 0.0.0.0 is a bind address, not a valid destination
+            if current_run_mode == "container":
+                metrics_url = f"http://localhost:{current_config.port}/metrics"
+            else:
+                metrics_url = f"http://{current_config.host}:{current_config.port}/metrics"
         
         async with aiohttp.ClientSession() as session:
             try:
@@ -3061,8 +3081,12 @@ async def run_benchmark(config: BenchmarkConfig, server_config: VLLMConfig):
             logger.info(f"Using Kubernetes service URL for benchmark: {url}")
         else:
             # Subprocess mode or local container mode - connect to localhost
-            url = f"http://{server_config.host}:{server_config.port}/v1/chat/completions"
-            logger.info(f"Using localhost URL for benchmark: {url}")
+            # Use localhost for container mode since 0.0.0.0 is a bind address, not a valid destination
+            if current_run_mode == "container":
+                url = f"http://localhost:{server_config.port}/v1/chat/completions"
+            else:
+                url = f"http://{server_config.host}:{server_config.port}/v1/chat/completions"
+            logger.info(f"Using URL for benchmark: {url}")
         
         # Generate a sample prompt of specified length
         prompt_text = " ".join(["benchmark" for _ in range(config.prompt_tokens // 10)])
