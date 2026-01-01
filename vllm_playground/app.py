@@ -2175,6 +2175,7 @@ async def list_models():
         {"name": "meta-llama/Llama-3.2-1B-Instruct", "size": "1B", "description": "Llama 3.2 1B Instruct (CPU-friendly, gated)", "cpu_friendly": True, "gated": True},
         
         # Larger models (may be slow on CPU)
+        {"name": "Qwen/Qwen2.5-3B-Instruct", "size": "3B", "description": "Qwen 2.5 3B Instruct (GPU-optimized)", "cpu_friendly": False},
         {"name": "mistralai/Mistral-7B-Instruct-v0.2", "size": "7B", "description": "Mistral Instruct (slow on CPU)", "cpu_friendly": False},
         {"name": "RedHatAI/Llama-3.2-1B-Instruct-FP8", "size": "1B", "description": "Llama 3.2 1B Instruct FP8 (GPU-optimized, gated)", "cpu_friendly": False, "gated": True},
         {"name": "RedHatAI/Llama-3.1-8B-Instruct", "size": "8B", "description": "Llama 3.1 8B Instruct (gated)", "cpu_friendly": False, "gated": True},

@@ -136,6 +136,65 @@ def detect_tool_call_parser(model_name: str) -> Optional[str]:
     return None
 
 
+def normalize_tool_call(tool_call_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Normalize tool call data from various model formats to the standard format.
+    
+    Different models output tool calls in different formats:
+    - Standard: {"name": "func", "arguments": {...}}
+    - Llama 3.2: {"function": "func", "parameters": {...}}
+    - Some models: {"function_name": "func", "args": {...}}
+    
+    This function normalizes all formats to the standard format.
+    
+    Returns:
+        Normalized tool call dict or None if invalid
+    """
+    if not tool_call_data or not isinstance(tool_call_data, dict):
+        return None
+    
+    # Try to extract function name from various possible fields
+    name = None
+    for name_field in ['name', 'function', 'function_name', 'func', 'tool']:
+        if name_field in tool_call_data and isinstance(tool_call_data[name_field], str):
+            name = tool_call_data[name_field]
+            break
+    
+    # Try to extract arguments from various possible fields
+    arguments = None
+    for args_field in ['arguments', 'parameters', 'params', 'args', 'input']:
+        if args_field in tool_call_data:
+            args_value = tool_call_data[args_field]
+            if isinstance(args_value, dict):
+                arguments = args_value
+                break
+            elif isinstance(args_value, str):
+                # Try to parse as JSON
+                try:
+                    arguments = json.loads(args_value)
+                    break
+                except:
+                    arguments = {"raw": args_value}
+                    break
+    
+    if not name:
+        logger.warning(f"Could not extract function name from tool call: {tool_call_data}")
+        return None
+    
+    # Build normalized tool call
+    normalized = {
+        "id": tool_call_data.get("id", f"call_{hash(name) % 10000}"),
+        "type": "function",
+        "function": {
+            "name": name,
+            "arguments": json.dumps(arguments) if arguments else "{}"
+        }
+    }
+    
+    logger.info(f"🔧 Normalized tool call: {tool_call_data} -> {normalized}")
+    return normalized
+
+
 class ToolFunction(BaseModel):
     """Function definition within a tool"""
     name: str
@@ -1596,6 +1655,23 @@ async def chat(request: ChatRequestWithStopTokens):
                 for tool in request.tools
             ]
             logger.info(f"🔧 Tools enabled: {[t.function.name for t in request.tools]}")
+            
+            # Add format guidance to help models generate correct tool call JSON
+            # This helps models that use different formats (function vs name, parameters vs arguments)
+            tool_format_hint = (
+                '\n\nWhen calling a function, respond with JSON in this exact format: '
+                '{"name": "<function_name>", "arguments": {<parameters>}}'
+            )
+            # Inject hint into the last system message or first user message
+            for i, msg in enumerate(messages_dict):
+                if msg.get("role") == "system":
+                    messages_dict[i]["content"] = msg["content"] + tool_format_hint
+                    logger.info("🔧 Added tool format hint to system message")
+                    break
+            else:
+                # No system message found, add as a new system message at the beginning
+                messages_dict.insert(0, {"role": "system", "content": f"You are a helpful assistant.{tool_format_hint}"})
+                logger.info("🔧 Added system message with tool format hint")
         
         # Add tool_choice if provided
         if request.tool_choice is not None:
@@ -2175,6 +2251,7 @@ async def list_models():
         {"name": "meta-llama/Llama-3.2-1B-Instruct", "size": "1B", "description": "Llama 3.2 1B Instruct (CPU-friendly, gated)", "cpu_friendly": True, "gated": True},
         
         # Larger models (may be slow on CPU)
+        {"name": "Qwen/Qwen2.5-3B-Instruct", "size": "3B", "description": "Qwen 2.5 3B Instruct (GPU-optimized)", "cpu_friendly": False},
         {"name": "mistralai/Mistral-7B-Instruct-v0.2", "size": "7B", "description": "Mistral Instruct (slow on CPU)", "cpu_friendly": False},
         {"name": "RedHatAI/Llama-3.2-1B-Instruct-FP8", "size": "1B", "description": "Llama 3.2 1B Instruct FP8 (GPU-optimized, gated)", "cpu_friendly": False, "gated": True},
         {"name": "RedHatAI/Llama-3.1-8B-Instruct", "size": "8B", "description": "Llama 3.1 8B Instruct (gated)", "cpu_friendly": False, "gated": True},
