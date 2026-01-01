@@ -40,6 +40,19 @@ except ImportError:
         CONTAINER_MODE_AVAILABLE = False
         logger.warning("container_manager not available - container mode will be disabled")
 
+# Import Ray backend (optional - only needed for ray mode)
+try:
+    from .ray_serve import ray_backend
+    RAY_MODE_AVAILABLE = True
+except ImportError:
+    try:
+        # Fallback for running as standalone script
+        from ray_serve import ray_backend
+        RAY_MODE_AVAILABLE = True
+    except ImportError:
+        RAY_MODE_AVAILABLE = False
+        logger.warning("ray_backend not available - ray mode will be disabled. Install with: pip install vllm-playground[ray]")
+
 app = FastAPI(title="vLLM Playground", version="1.0.0")
 
 # Get base directory
@@ -90,10 +103,13 @@ class VLLMConfig(BaseModel):
     # Local model support - for pre-downloaded models
     # If specified, takes precedence over 'model' parameter
     local_model_path: Optional[str] = None
-    # Run mode: subprocess or container
-    run_mode: Literal["subprocess", "container"] = "subprocess"
+    # Run mode: subprocess, container, or ray
+    run_mode: Literal["subprocess", "container", "ray"] = "subprocess"
     # GPU device selection for subprocess mode (e.g., "0", "1", "0,1" for multi-GPU)
     gpu_device: Optional[str] = None
+    # Ray cluster address (optional - for ray mode, e.g., "127.0.0.1:6379")
+    # If None, Ray backend will auto-detect or start local cluster
+    ray_address: Optional[str] = None
 
 
 class ChatMessage(BaseModel):
@@ -518,6 +534,13 @@ async def get_status() -> ServerStatus:
             running = vllm_process.returncode is None
         else:
             running = False
+    elif current_run_mode == "ray":
+        # Check Ray deployment status
+        if RAY_MODE_AVAILABLE:
+            status = await ray_backend.get_status()
+            running = status.get('running', False)
+        else:
+            running = False
     else:
         # If run mode is not set (e.g., after restart), check if container exists
         # This handles the case where Web UI restarts but vLLM pod is still running
@@ -870,6 +893,13 @@ async def start_server(config: VLLMConfig):
                 status_code=400,
                 detail="Container mode is not available. container_manager module not found."
             )
+
+        # Validate Ray mode is available if selected
+        if config.run_mode == "ray" and not RAY_MODE_AVAILABLE:
+            raise HTTPException(
+                status_code=400,
+                detail="Ray mode is not available. Install with: pip install vllm-playground[ray]"
+            )
         
         await broadcast_log(f"[WEBUI] Run mode: {config.run_mode.upper()}")
         
@@ -1102,7 +1132,98 @@ async def start_server(config: VLLMConfig):
                     "ready": False,
                     "warning": error_msg
                 }
-        
+
+        elif config.run_mode == "ray":
+            await broadcast_log(f"[WEBUI] Starting vLLM with Ray Serve...")
+
+            # Initialize Ray if address is provided
+            if config.ray_address:
+                await broadcast_log(f"[WEBUI] Connecting to Ray cluster at: {config.ray_address}")
+                init_result = await ray_backend.initialize_ray(address=config.ray_address)
+            else:
+                await broadcast_log(f"[WEBUI] Auto-detecting Ray cluster...")
+                init_result = await ray_backend.initialize_ray()
+
+            if not init_result['initialized']:
+                error_msg = init_result.get('message', 'Failed to initialize Ray')
+                await broadcast_log(f"[WEBUI] ❌ {error_msg}")
+                raise HTTPException(status_code=500, detail=error_msg)
+
+            await broadcast_log(f"[WEBUI] ✓ Ray cluster connected")
+            await broadcast_log(f"[WEBUI] Mode: {init_result['mode']}")
+            await broadcast_log(f"[WEBUI] Address: {init_result['address']}")
+            await broadcast_log(f"[WEBUI] Nodes: {init_result['nodes']}")
+
+            # Prepare vLLM config dict for Ray backend
+            vllm_config_dict = {
+                'model': config.model,
+                'model_source': model_source,
+                'host': config.host,
+                'port': config.port,
+                'tensor_parallel_size': config.tensor_parallel_size,
+                'gpu_memory_utilization': config.gpu_memory_utilization,
+                'max_model_len': config.max_model_len,
+                'dtype': config.dtype,
+                'trust_remote_code': config.trust_remote_code,
+                'download_dir': config.download_dir,
+                'load_format': config.load_format,
+                'disable_log_stats': config.disable_log_stats,
+                'enable_prefix_caching': config.enable_prefix_caching,
+                'hf_token': config.hf_token,
+                'use_cpu': config.use_cpu,
+                'cpu_kvcache_space': config.cpu_kvcache_space,
+                'cpu_omp_threads_bind': config.cpu_omp_threads_bind,
+                'custom_chat_template': config.custom_chat_template,
+                'local_model_path': config.local_model_path
+            }
+
+            await broadcast_log(f"[WEBUI] Deploying model with Ray Serve...")
+            await broadcast_log(f"[WEBUI] This may take several minutes for model download and initialization...")
+
+            # Deploy model
+            result = await ray_backend.start_model(vllm_config_dict, wait_ready=True)
+
+            if not result['started']:
+                error_msg = result.get('message', 'Failed to deploy model')
+                await broadcast_log(f"[WEBUI] ❌ {error_msg}")
+                raise HTTPException(status_code=500, detail=error_msg)
+
+            vllm_running = True
+            current_config = config
+            server_start_time = datetime.now()
+            current_model_identifier = model_source
+
+            await broadcast_log(f"[WEBUI] ✅ Model deployed successfully")
+            await broadcast_log(f"[WEBUI] Application: {result['application_name']}")
+            await broadcast_log(f"[WEBUI] Model: {model_display_name}")
+            if config.local_model_path:
+                await broadcast_log(f"[WEBUI] Model Source: Local ({model_source})")
+            else:
+                await broadcast_log(f"[WEBUI] Model Source: HuggingFace Hub")
+            if config.use_cpu:
+                await broadcast_log(f"[WEBUI] Mode: CPU")
+            else:
+                await broadcast_log(f"[WEBUI] Mode: GPU (Tensor Parallel: {config.tensor_parallel_size})")
+
+            if result.get('ready'):
+                await broadcast_log(f"[WEBUI] ✅ vLLM is ready! (took {result.get('elapsed_time')}s)")
+                return {
+                    "status": "ready",
+                    "application_name": result['application_name'],
+                    "mode": "ray",
+                    "ready": True,
+                    "startup_time": result.get('elapsed_time')
+                }
+            else:
+                await broadcast_log(f"[WEBUI] ⚠️ Model deployed but readiness check timed out")
+                await broadcast_log(f"[WEBUI] Check Ray dashboard for deployment status")
+                return {
+                    "status": "started",
+                    "application_name": result['application_name'],
+                    "mode": "ray",
+                    "ready": False
+                }
+
         else:  # subprocess mode
             await broadcast_log(f"[WEBUI] Starting vLLM subprocess...")
             await broadcast_log(f"[WEBUI] Command: {' '.join(cmd)}")
@@ -1156,6 +1277,10 @@ async def stop_server():
     elif current_run_mode == "subprocess":
         if vllm_process is None or vllm_process.returncode is not None:
             raise HTTPException(status_code=400, detail="Server is not running")
+    elif current_run_mode == "ray":
+        status = await ray_backend.get_status()
+        if not status.get('running', False):
+            raise HTTPException(status_code=400, detail="Server is not running")
     else:
         raise HTTPException(status_code=400, detail="Server is not running")
     
@@ -1168,7 +1293,20 @@ async def stop_server():
             
             container_id = None
             await broadcast_log("[WEBUI] vLLM container stopped")
-        
+
+        elif current_run_mode == "ray":
+            await broadcast_log("[WEBUI] Stopping Ray Serve deployment...")
+
+            # Stop Ray deployment
+            result = await ray_backend.stop_model()
+
+            if result['stopped']:
+                await broadcast_log(f"[WEBUI] ✅ Ray deployment stopped: {result['status']}")
+            else:
+                await broadcast_log(f"[WEBUI] ⚠️ Warning: {result.get('error')}")
+
+            await broadcast_log("[WEBUI] vLLM Ray deployment stopped")
+
         else:  # subprocess mode
             await broadcast_log("[WEBUI] Stopping vLLM subprocess...")
             
