@@ -78,6 +78,48 @@ Verify that the installation and setup are correct.
 python scripts/verify_setup.py
 ```
 
+## Package Sync Scripts
+
+### sync_to_package.py ⭐ IMPORTANT FOR MAINTAINERS
+
+Syncs files from the root directory to the `vllm_playground/` package directory for PyPI distribution.
+
+**Why this exists:**
+- The project maintains TWO copies of the code:
+  - **Root** (`app.py`, etc.): For users who clone and run directly
+  - **Package** (`vllm_playground/`): For PyPI installation (`pip install vllm-playground`)
+- The package version requires different imports (relative imports like `from .container_manager`)
+
+**Usage:**
+```bash
+# Preview what would be synced (recommended first)
+python3 scripts/sync_to_package.py --dry-run
+
+# Actually sync the files
+python3 scripts/sync_to_package.py
+
+# Verbose output
+python3 scripts/sync_to_package.py --verbose
+```
+
+**What it syncs:**
+| Source | Destination | Transform |
+|--------|-------------|-----------|
+| `app.py` | `vllm_playground/app.py` | ✅ Fixes imports for package |
+| `container_manager.py` | `vllm_playground/container_manager.py` | Direct copy |
+| `index.html` | `vllm_playground/index.html` | Direct copy |
+| `static/` | `vllm_playground/static/` | Direct copy |
+| `assets/` | `vllm_playground/assets/` | Direct copy |
+| `config/` | `vllm_playground/config/` | Direct copy |
+| `recipes/` | `vllm_playground/recipes/` | Direct copy |
+
+**When to run:**
+- After making changes to any root files
+- Before building a new PyPI package version
+- Run: `python3 scripts/sync_to_package.py && python -m build`
+
+---
+
 ## CPU-Specific Scripts
 
 ### run_cpu.sh

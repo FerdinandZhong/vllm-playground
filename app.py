@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 import shutil
 from datetime import datetime
-from typing import Optional, List, Dict, Any, Literal
+from typing import Optional, List, Dict, Any, Literal, Union
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
@@ -89,12 +89,142 @@ class VLLMConfig(BaseModel):
     run_mode: Literal["subprocess", "container"] = "subprocess"
     # GPU device selection for subprocess mode (e.g., "0", "1", "0,1" for multi-GPU)
     gpu_device: Optional[str] = None
+    # Tool calling support - enables function calling with compatible models
+    # Requires vLLM server to be started with --enable-auto-tool-choice and --tool-call-parser
+    enable_tool_calling: bool = False  # Disabled by default (can cause issues with some models)
+    # Tool call parser: auto-detects based on model name, or specify explicitly
+    # Options: llama3_json (Llama 3.x), mistral (Mistral), hermes (NousResearch Hermes),
+    #          internlm (InternLM), granite-20b-fc (IBM Granite), pythonic (experimental)
+    tool_call_parser: Optional[str] = None  # None = auto-detect based on model name
+
+
+def detect_tool_call_parser(model_name: str) -> Optional[str]:
+    """
+    Auto-detect the appropriate tool call parser based on model name.
+    
+    Returns the parser name or None if no suitable parser is detected.
+    In that case, tool calling will be disabled.
+    """
+    model_lower = model_name.lower()
+    
+    # Llama 3.x models (Meta)
+    if any(x in model_lower for x in ['llama-3', 'llama3', 'llama_3']):
+        return 'llama3_json'
+    
+    # Mistral models
+    if 'mistral' in model_lower:
+        return 'mistral'
+    
+    # NousResearch Hermes models
+    if 'hermes' in model_lower:
+        return 'hermes'
+    
+    # InternLM models
+    if 'internlm' in model_lower:
+        return 'internlm'
+    
+    # IBM Granite models
+    if 'granite' in model_lower:
+        return 'granite-20b-fc'
+    
+    # Qwen models
+    if 'qwen' in model_lower:
+        return 'hermes'  # Qwen typically uses Hermes-style tool calling
+    
+    # Default: return None (tool calling won't be enabled for unknown models)
+    # User can explicitly set tool_call_parser in config
+    return None
+
+
+def normalize_tool_call(tool_call_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Normalize tool call data from various model formats to the standard format.
+    
+    Different models output tool calls in different formats:
+    - Standard: {"name": "func", "arguments": {...}}
+    - Llama 3.2: {"function": "func", "parameters": {...}}
+    - Some models: {"function_name": "func", "args": {...}}
+    
+    This function normalizes all formats to the standard format.
+    
+    Returns:
+        Normalized tool call dict or None if invalid
+    """
+    if not tool_call_data or not isinstance(tool_call_data, dict):
+        return None
+    
+    # Try to extract function name from various possible fields
+    name = None
+    for name_field in ['name', 'function', 'function_name', 'func', 'tool']:
+        if name_field in tool_call_data and isinstance(tool_call_data[name_field], str):
+            name = tool_call_data[name_field]
+            break
+    
+    # Try to extract arguments from various possible fields
+    arguments = None
+    for args_field in ['arguments', 'parameters', 'params', 'args', 'input']:
+        if args_field in tool_call_data:
+            args_value = tool_call_data[args_field]
+            if isinstance(args_value, dict):
+                arguments = args_value
+                break
+            elif isinstance(args_value, str):
+                # Try to parse as JSON
+                try:
+                    arguments = json.loads(args_value)
+                    break
+                except:
+                    arguments = {"raw": args_value}
+                    break
+    
+    if not name:
+        logger.warning(f"Could not extract function name from tool call: {tool_call_data}")
+        return None
+    
+    # Build normalized tool call
+    normalized = {
+        "id": tool_call_data.get("id", f"call_{hash(name) % 10000}"),
+        "type": "function",
+        "function": {
+            "name": name,
+            "arguments": json.dumps(arguments) if arguments else "{}"
+        }
+    }
+    
+    logger.info(f"🔧 Normalized tool call: {tool_call_data} -> {normalized}")
+    return normalized
+
+
+class ToolFunction(BaseModel):
+    """Function definition within a tool"""
+    name: str
+    description: Optional[str] = None
+    parameters: Optional[Dict[str, Any]] = None  # JSON Schema for parameters
+
+
+class Tool(BaseModel):
+    """Tool definition for function calling (OpenAI-compatible)"""
+    type: str = "function"  # Currently only "function" is supported
+    function: ToolFunction
+
+
+class ToolCall(BaseModel):
+    """Tool call made by the assistant"""
+    id: str
+    type: str = "function"
+    function: Dict[str, str]  # {"name": "...", "arguments": "..."}
 
 
 class ChatMessage(BaseModel):
-    """Chat message structure"""
-    role: str
-    content: str
+    """Chat message structure with tool calling support"""
+    role: str  # "system", "user", "assistant", or "tool"
+    content: Optional[str] = None  # Can be None when assistant makes tool calls
+    # For assistant messages with tool calls
+    tool_calls: Optional[List[ToolCall]] = None
+    # For tool response messages
+    tool_call_id: Optional[str] = None  # Required when role="tool"
+    # Optional name field (used in some contexts)
+    name: Optional[str] = None
 
 
 class ChatRequest(BaseModel):
@@ -575,7 +705,11 @@ async def debug_connection():
             debug_info["url_would_use"] = url
             debug_info["connection_mode"] = "kubernetes_service"
         else:
-            url = f"http://{current_config.host}:{current_config.port}/v1/chat/completions"
+            # Use localhost for container mode since 0.0.0.0 is a bind address, not a valid destination
+            if current_run_mode == "container":
+                url = f"http://localhost:{current_config.port}/v1/chat/completions"
+            else:
+                url = f"http://{current_config.host}:{current_config.port}/v1/chat/completions"
             debug_info["url_would_use"] = url
             debug_info["connection_mode"] = "localhost"
     
@@ -604,7 +738,11 @@ async def test_vllm_connection():
         namespace = getattr(container_manager, 'namespace', os.getenv('KUBERNETES_NAMESPACE', 'default'))
         base_url = f"http://{service_name}.{namespace}.svc.cluster.local:{current_config.port}"
     else:
-        base_url = f"http://{current_config.host}:{current_config.port}"
+        # Use localhost for container mode since 0.0.0.0 is a bind address, not a valid destination
+        if current_run_mode == "container":
+            base_url = f"http://localhost:{current_config.port}"
+        else:
+            base_url = f"http://{current_config.host}:{current_config.port}"
     
     health_url = f"{base_url}/health"
     
@@ -997,6 +1135,25 @@ async def start_server(config: VLLMConfig):
             await broadcast_log(f"[WEBUI] Trusting vLLM to auto-detect chat template from tokenizer_config.json")
             await broadcast_log(f"[WEBUI] vLLM will use model's built-in chat template automatically")
         
+        # Tool calling support
+        # Add --enable-auto-tool-choice and --tool-call-parser for function calling
+        if config.enable_tool_calling:
+            # Determine the tool call parser
+            tool_parser = config.tool_call_parser
+            if not tool_parser:
+                # Auto-detect based on model name
+                tool_parser = detect_tool_call_parser(model_source)
+            
+            if tool_parser:
+                cmd.append("--enable-auto-tool-choice")
+                cmd.extend(["--tool-call-parser", tool_parser])
+                await broadcast_log(f"[WEBUI] 🔧 Tool calling enabled with parser: {tool_parser}")
+            else:
+                await broadcast_log(f"[WEBUI] ⚠️ Tool calling requested but no parser detected for model")
+                await broadcast_log(f"[WEBUI] Set tool_call_parser explicitly or use a supported model (Llama 3.x, Mistral, etc.)")
+        else:
+            await broadcast_log(f"[WEBUI] Tool calling disabled")
+        
         # Start server based on mode
         if config.run_mode == "container":
             await broadcast_log(f"[WEBUI] Starting vLLM container...")
@@ -1021,8 +1178,12 @@ async def start_server(config: VLLMConfig):
                 'cpu_kvcache_space': config.cpu_kvcache_space,
                 'cpu_omp_threads_bind': config.cpu_omp_threads_bind,
                 'custom_chat_template': config.custom_chat_template,
-                'local_model_path': config.local_model_path
+                'local_model_path': config.local_model_path,
+                'enable_tool_calling': config.enable_tool_calling,
+                'tool_call_parser': config.tool_call_parser
             }
+            
+            logger.info(f"Container config: enable_tool_calling={config.enable_tool_calling}, tool_call_parser={config.tool_call_parser}")
             
             # Start container
             container_info = await container_manager.start_container(vllm_config_dict)
@@ -1364,13 +1525,53 @@ async def websocket_logs(websocket: WebSocket):
             websocket_connections.remove(websocket)
 
 
+class ToolChoice(BaseModel):
+    """Specific tool choice when tool_choice is an object"""
+    type: str = "function"
+    function: Dict[str, str]  # {"name": "function_name"}
+
+
+class StructuredOutputs(BaseModel):
+    """Structured outputs configuration for guided decoding"""
+    choice: Optional[List[str]] = None  # List of allowed choices
+    regex: Optional[str] = None  # Regex pattern to match
+    grammar: Optional[str] = None  # EBNF grammar
+
+
+class JsonSchema(BaseModel):
+    """JSON Schema definition for response_format"""
+    name: str = "response"
+    schema_: Dict[str, Any] = Field(default_factory=dict, alias="schema")
+    strict: Optional[bool] = None
+    
+    class Config:
+        populate_by_name = True
+
+
+class ResponseFormat(BaseModel):
+    """Response format configuration (OpenAI-compatible)"""
+    type: str  # "json_schema" or "json_object"
+    json_schema: Optional[JsonSchema] = None
+
+
 class ChatRequestWithStopTokens(BaseModel):
-    """Chat request structure with optional stop tokens override"""
+    """Chat request structure with optional stop tokens override and tool calling support"""
     messages: List[ChatMessage]
     temperature: float = 0.7
     max_tokens: int = 256
     stream: bool = True
     stop_tokens: Optional[List[str]] = None  # Allow overriding stop tokens per request
+    
+    # Tool/Function Calling Support (OpenAI-compatible)
+    # See: https://platform.openai.com/docs/guides/function-calling
+    tools: Optional[List[Tool]] = None  # List of available tools/functions
+    tool_choice: Optional[Union[str, ToolChoice]] = None  # "auto", "none", "required", or specific tool
+    parallel_tool_calls: Optional[bool] = None  # Allow multiple tool calls in one response
+    
+    # Structured Outputs Support (vLLM guided decoding)
+    # See: https://docs.vllm.ai/en/latest/features/structured_outputs.html
+    structured_outputs: Optional[StructuredOutputs] = None  # For choice, regex, grammar
+    response_format: Optional[ResponseFormat] = None  # For JSON schema (OpenAI-compatible)
 
 
 @app.post("/api/chat")
@@ -1418,13 +1619,44 @@ async def chat(request: ChatRequestWithStopTokens):
             logger.info(f"  Port: {current_config.port}")
         else:
             # Subprocess mode or local container mode - connect to localhost
-            url = f"http://{current_config.host}:{current_config.port}/v1/chat/completions"
-            logger.info(f"✓ Using localhost URL: {url}")
+            # Use localhost for container mode since 0.0.0.0 is a bind address, not a valid destination
+            if current_run_mode == "container":
+                url = f"http://localhost:{current_config.port}/v1/chat/completions"
+            else:
+                url = f"http://{current_config.host}:{current_config.port}/v1/chat/completions"
+            logger.info(f"✓ Using URL: {url}")
         
         logger.info(f"=====================================")
         
-        # Convert messages to OpenAI format
-        messages_dict = [{"role": m.role, "content": m.content} for m in request.messages]
+        # Convert messages to OpenAI format with full tool calling support
+        messages_dict = []
+        for m in request.messages:
+            msg = {"role": m.role}
+            
+            # Content can be None for assistant messages with tool_calls
+            if m.content is not None:
+                msg["content"] = m.content
+            
+            # Include tool_calls for assistant messages
+            if m.tool_calls:
+                msg["tool_calls"] = [
+                    {
+                        "id": tc.id,
+                        "type": tc.type,
+                        "function": tc.function
+                    }
+                    for tc in m.tool_calls
+                ]
+            
+            # Include tool_call_id for tool response messages
+            if m.tool_call_id:
+                msg["tool_call_id"] = m.tool_call_id
+            
+            # Include name if provided
+            if m.name:
+                msg["name"] = m.name
+            
+            messages_dict.append(msg)
         
         # Build payload for OpenAI-compatible endpoint
         # Use current_model_identifier (actual path or HF model) instead of config.model
@@ -1435,6 +1667,102 @@ async def chat(request: ChatRequestWithStopTokens):
             "max_tokens": request.max_tokens,
             "stream": request.stream,
         }
+        
+        # Tool/Function Calling Support
+        # Add tools if provided
+        if request.tools:
+            payload["tools"] = [
+                {
+                    "type": tool.type,
+                    "function": {
+                        "name": tool.function.name,
+                        "description": tool.function.description,
+                        "parameters": tool.function.parameters or {"type": "object", "properties": {}}
+                    }
+                }
+                for tool in request.tools
+            ]
+            logger.info(f"🔧 Tools enabled: {[t.function.name for t in request.tools]}")
+            
+            # Add format guidance to help models generate correct tool call JSON
+            # This helps models that use different formats (function vs name, parameters vs arguments)
+            tool_format_hint = (
+                '\n\nWhen calling a function, respond with JSON in this exact format: '
+                '{"name": "<function_name>", "arguments": {<parameters>}}'
+            )
+            # Inject hint into the last system message or first user message
+            for i, msg in enumerate(messages_dict):
+                if msg.get("role") == "system":
+                    messages_dict[i]["content"] = msg["content"] + tool_format_hint
+                    logger.info("🔧 Added tool format hint to system message")
+                    break
+            else:
+                # No system message found, add as a new system message at the beginning
+                messages_dict.insert(0, {"role": "system", "content": f"You are a helpful assistant.{tool_format_hint}"})
+                logger.info("🔧 Added system message with tool format hint")
+        
+        # Add tool_choice if provided
+        if request.tool_choice is not None:
+            # Validate: tool_choice requires tools to be defined
+            if not request.tools or len(request.tools) == 0:
+                logger.warning(f"⚠️ tool_choice '{request.tool_choice}' provided but no tools defined - ignoring")
+            else:
+                if isinstance(request.tool_choice, str):
+                    # String values: "auto", "none"
+                    # Note: "required" is disabled as it can crash vLLM servers
+                    if request.tool_choice == "required":
+                        logger.warning(f"⚠️ tool_choice 'required' is disabled (can crash server) - using 'auto' instead")
+                        payload["tool_choice"] = "auto"
+                    else:
+                        payload["tool_choice"] = request.tool_choice
+                    logger.info(f"🔧 Tool choice: {payload.get('tool_choice', request.tool_choice)}")
+                else:
+                    # Specific tool choice object
+                    payload["tool_choice"] = {
+                        "type": request.tool_choice.type,
+                        "function": request.tool_choice.function
+                    }
+                    logger.info(f"🔧 Tool choice: specific function - {request.tool_choice.function}")
+        
+        # Add parallel_tool_calls if provided
+        if request.parallel_tool_calls is not None:
+            payload["parallel_tool_calls"] = request.parallel_tool_calls
+            logger.info(f"🔧 Parallel tool calls: {request.parallel_tool_calls}")
+        
+        # Structured Outputs Support (vLLM guided decoding)
+        # See: https://docs.vllm.ai/en/latest/features/structured_outputs.html
+        if request.response_format:
+            # JSON Schema mode (OpenAI-compatible response_format)
+            if request.response_format.type == "json_schema" and request.response_format.json_schema:
+                payload["response_format"] = {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": request.response_format.json_schema.name,
+                        "schema": request.response_format.json_schema.schema_
+                    }
+                }
+                if request.response_format.json_schema.strict is not None:
+                    payload["response_format"]["json_schema"]["strict"] = request.response_format.json_schema.strict
+                logger.info(f"📋 JSON Schema structured output enabled: {request.response_format.json_schema.name}")
+            elif request.response_format.type == "json_object":
+                payload["response_format"] = {"type": "json_object"}
+                logger.info(f"📋 JSON Object mode enabled")
+        elif request.structured_outputs:
+            # vLLM-specific guided decoding via extra_body
+            extra_body = {}
+            if request.structured_outputs.choice:
+                extra_body["guided_choice"] = request.structured_outputs.choice
+                logger.info(f"📋 Guided choice enabled: {request.structured_outputs.choice}")
+            elif request.structured_outputs.regex:
+                extra_body["guided_regex"] = request.structured_outputs.regex
+                logger.info(f"📋 Guided regex enabled: {request.structured_outputs.regex}")
+            elif request.structured_outputs.grammar:
+                extra_body["guided_grammar"] = request.structured_outputs.grammar
+                logger.info(f"📋 Guided grammar enabled")
+            
+            if extra_body:
+                # vLLM accepts these parameters directly in the request body
+                payload.update(extra_body)
         
         # Stop tokens handling:
         # By default, trust vLLM to use appropriate stop tokens from the model's tokenizer
@@ -1502,12 +1830,26 @@ async def chat(request: ChatRequestWithStopTokens):
                                                     if data_str and data_str != "[DONE]":
                                                         data = json.loads(data_str)
                                                         if 'choices' in data and len(data['choices']) > 0:
-                                                            delta = data['choices'][0].get('delta', {})
+                                                            choice = data['choices'][0]
+                                                            delta = choice.get('delta', {})
                                                             content = delta.get('content', '')
+                                                            finish_reason = choice.get('finish_reason')
+                                                            
                                                             if content:
                                                                 full_response_text += content
-                                                except:
-                                                    pass
+                                                            
+                                                            # Log tool calls if present
+                                                            if delta.get('tool_calls'):
+                                                                logger.info(f"🔧 Streaming tool_calls in delta: {delta['tool_calls']}")
+                                                            
+                                                            # Log finish reason for debugging
+                                                            if finish_reason:
+                                                                logger.info(f"🏁 Finish reason: {finish_reason}")
+                                                                if finish_reason == 'tool_calls' and not delta.get('tool_calls'):
+                                                                    logger.warning(f"⚠️ finish_reason is 'tool_calls' but no tool_calls data in delta!")
+                                                                    logger.warning(f"⚠️ Full chunk data: {data}")
+                                                except Exception as parse_err:
+                                                    logger.debug(f"Failed to parse SSE data: {parse_err}")
                                             # Pass through the SSE formatted data
                                             yield line + '\n'
                             
@@ -1563,7 +1905,9 @@ async def chat(request: ChatRequestWithStopTokens):
                         logger.error(f"Status: {response.status}")
                         logger.error(f"Error: {text}")
                         logger.error(f"===========================================")
-                        raise HTTPException(status_code=response.status, detail=text)
+                        # Provide meaningful error message even if vLLM returns empty body
+                        error_detail = text.strip() if text.strip() else f"vLLM server returned HTTP {response.status}"
+                        raise HTTPException(status_code=response.status, detail=error_detail)
                     
                     data = await response.json()
                     # Log the complete response
@@ -1572,14 +1916,35 @@ async def chat(request: ChatRequestWithStopTokens):
                     if 'choices' in data and len(data['choices']) > 0:
                         message = data['choices'][0].get('message', {})
                         content = message.get('content', '')
-                        logger.info(f"Response text: {content}")
-                        logger.info(f"Length: {len(content)} chars")
+                        tool_calls = message.get('tool_calls', [])
+                        
+                        if content:
+                            logger.info(f"Response text: {content}")
+                            logger.info(f"Length: {len(content)} chars")
+                        
+                        if tool_calls:
+                            logger.info(f"🔧 Tool calls detected: {len(tool_calls)}")
+                            for tc in tool_calls:
+                                func = tc.get('function', {})
+                                logger.info(f"  - {func.get('name', 'unknown')}: {func.get('arguments', '{}')}")
                     logger.info(f"=====================================")
                     return data
     
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is (they already have proper status and detail)
+        raise
+    except aiohttp.ClientError as e:
+        # Handle aiohttp client errors (connection issues, timeouts, etc.)
+        error_msg = f"Connection error to vLLM server: {type(e).__name__}: {str(e) or 'Unknown error'}"
+        logger.error(f"Chat error: {error_msg}")
+        raise HTTPException(status_code=503, detail=error_msg)
     except Exception as e:
-        logger.error(f"Chat error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Handle all other errors with detailed logging
+        import traceback
+        error_msg = str(e) if str(e) else f"{type(e).__name__}: Unknown error"
+        logger.error(f"Chat error: {error_msg}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=error_msg)
 
 
 class CompletionRequest(BaseModel):
@@ -1587,6 +1952,308 @@ class CompletionRequest(BaseModel):
     prompt: str
     temperature: float = 0.7
     max_tokens: int = 256
+
+
+class ToolValidationRequest(BaseModel):
+    """Request to validate a tool definition"""
+    tools: List[Tool]
+
+
+@app.post("/api/tools/validate")
+async def validate_tools(request: ToolValidationRequest):
+    """
+    Validate tool definitions for correctness.
+    
+    Checks:
+    - Tool type is "function"
+    - Function name is valid (alphanumeric + underscore)
+    - Parameters follow JSON Schema format
+    
+    Returns validation results with any errors found.
+    """
+    import re
+    
+    results = []
+    valid_name_pattern = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
+    
+    for tool in request.tools:
+        tool_result = {
+            "name": tool.function.name,
+            "valid": True,
+            "errors": [],
+            "warnings": []
+        }
+        
+        # Check tool type
+        if tool.type != "function":
+            tool_result["errors"].append(f"Invalid tool type: '{tool.type}'. Only 'function' is supported.")
+            tool_result["valid"] = False
+        
+        # Check function name
+        if not valid_name_pattern.match(tool.function.name):
+            tool_result["errors"].append(f"Invalid function name: '{tool.function.name}'. Must start with letter/underscore and contain only alphanumeric characters.")
+            tool_result["valid"] = False
+        
+        # Check for description
+        if not tool.function.description:
+            tool_result["warnings"].append("Missing function description. Models perform better with clear descriptions.")
+        
+        # Check parameters schema
+        if tool.function.parameters:
+            params = tool.function.parameters
+            
+            # Check for type field
+            if "type" not in params:
+                tool_result["warnings"].append("Parameters schema missing 'type' field. Should be 'object'.")
+            elif params["type"] != "object":
+                tool_result["warnings"].append(f"Parameters type is '{params['type']}'. Usually should be 'object'.")
+            
+            # Check for properties
+            if params.get("type") == "object" and "properties" not in params:
+                tool_result["warnings"].append("Parameters schema missing 'properties' field.")
+            
+            # Check required fields
+            if "required" in params:
+                required = params["required"]
+                properties = params.get("properties", {})
+                for req_field in required:
+                    if req_field not in properties:
+                        tool_result["errors"].append(f"Required field '{req_field}' not found in properties.")
+                        tool_result["valid"] = False
+        
+        results.append(tool_result)
+    
+    all_valid = all(r["valid"] for r in results)
+    
+    return {
+        "valid": all_valid,
+        "tool_count": len(request.tools),
+        "results": results
+    }
+
+
+@app.get("/api/tools/presets")
+async def get_tool_presets():
+    """
+    Get predefined tool presets for common use cases.
+    
+    These presets provide ready-to-use tool definitions that can be
+    loaded directly into the chat interface.
+    """
+    presets = {
+        "weather": {
+            "name": "Weather Tools",
+            "description": "Get weather information for locations",
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_current_weather",
+                        "description": "Get the current weather in a given location",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "location": {
+                                    "type": "string",
+                                    "description": "The city and state, e.g. San Francisco, CA"
+                                },
+                                "unit": {
+                                    "type": "string",
+                                    "enum": ["celsius", "fahrenheit"],
+                                    "description": "Temperature unit"
+                                }
+                            },
+                            "required": ["location"]
+                        }
+                    }
+                }
+            ]
+        },
+        "calculator": {
+            "name": "Calculator Tools",
+            "description": "Perform mathematical calculations",
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "calculate",
+                        "description": "Evaluate a mathematical expression",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "expression": {
+                                    "type": "string",
+                                    "description": "The mathematical expression to evaluate, e.g. '2 + 2 * 3'"
+                                }
+                            },
+                            "required": ["expression"]
+                        }
+                    }
+                }
+            ]
+        },
+        "search": {
+            "name": "Search Tools",
+            "description": "Search for information",
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "web_search",
+                        "description": "Search the web for information",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "query": {
+                                    "type": "string",
+                                    "description": "The search query"
+                                },
+                                "num_results": {
+                                    "type": "integer",
+                                    "description": "Number of results to return",
+                                    "default": 5
+                                }
+                            },
+                            "required": ["query"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_page_content",
+                        "description": "Get the content of a web page",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "url": {
+                                    "type": "string",
+                                    "description": "The URL to fetch"
+                                }
+                            },
+                            "required": ["url"]
+                        }
+                    }
+                }
+            ]
+        },
+        "code_execution": {
+            "name": "Code Execution Tools",
+            "description": "Execute code in various languages",
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "execute_python",
+                        "description": "Execute Python code and return the output",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "code": {
+                                    "type": "string",
+                                    "description": "The Python code to execute"
+                                }
+                            },
+                            "required": ["code"]
+                        }
+                    }
+                }
+            ]
+        },
+        "database": {
+            "name": "Database Tools",
+            "description": "Query and manipulate database records",
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "query_database",
+                        "description": "Execute a SQL query on the database",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "query": {
+                                    "type": "string",
+                                    "description": "The SQL query to execute"
+                                },
+                                "database": {
+                                    "type": "string",
+                                    "description": "The database name to query"
+                                }
+                            },
+                            "required": ["query"]
+                        }
+                    }
+                }
+            ]
+        }
+    }
+    
+    return {
+        "presets": presets,
+        "count": len(presets)
+    }
+
+
+@app.get("/api/tools/info")
+async def get_tools_info():
+    """
+    Get information about tool calling support.
+    
+    Returns:
+    - Models known to support tool calling well
+    - Required vLLM version
+    - Usage tips
+    """
+    return {
+        "supported": True,
+        "vllm_version_required": "0.4.0+",
+        "openai_compatible": True,
+        "recommended_models": [
+            {
+                "name": "Llama 3.1/3.2",
+                "model_ids": [
+                    "meta-llama/Llama-3.1-8B-Instruct",
+                    "meta-llama/Llama-3.1-70B-Instruct",
+                    "meta-llama/Llama-3.2-1B-Instruct",
+                    "meta-llama/Llama-3.2-3B-Instruct"
+                ],
+                "notes": "Excellent native tool calling support with <|python_tag|> format"
+            },
+            {
+                "name": "Mistral/Mixtral",
+                "model_ids": [
+                    "mistralai/Mistral-7B-Instruct-v0.3",
+                    "mistralai/Mixtral-8x7B-Instruct-v0.1"
+                ],
+                "notes": "Good tool calling with [TOOL_CALLS] format"
+            },
+            {
+                "name": "Qwen 2.5",
+                "model_ids": [
+                    "Qwen/Qwen2.5-7B-Instruct",
+                    "Qwen/Qwen2.5-72B-Instruct"
+                ],
+                "notes": "Strong tool calling and code generation"
+            },
+            {
+                "name": "Hermes 2 Pro",
+                "model_ids": [
+                    "NousResearch/Hermes-2-Pro-Llama-3-8B",
+                    "NousResearch/Hermes-2-Pro-Mistral-7B"
+                ],
+                "notes": "Fine-tuned specifically for function calling"
+            }
+        ],
+        "usage_tips": [
+            "Use 'tool_choice': 'auto' to let the model decide when to use tools",
+            "Use 'tool_choice': 'required' to force tool usage",
+            "Use 'tool_choice': 'none' to disable tool usage for a request",
+            "Provide clear, detailed descriptions for better tool selection",
+            "Include parameter descriptions for more accurate argument generation",
+            "For multi-step tasks, set 'parallel_tool_calls': true"
+        ]
+    }
 
 
 @app.post("/api/completion")
@@ -1623,8 +2290,12 @@ async def completion(request: CompletionRequest):
             logger.info(f"Using Kubernetes service URL: {url}")
         else:
             # Subprocess mode or local container mode - connect to localhost
-            url = f"http://{current_config.host}:{current_config.port}/v1/completions"
-            logger.info(f"Using localhost URL: {url}")
+            # Use localhost for container mode since 0.0.0.0 is a bind address, not a valid destination
+            if current_run_mode == "container":
+                url = f"http://localhost:{current_config.port}/v1/completions"
+            else:
+                url = f"http://{current_config.host}:{current_config.port}/v1/completions"
+            logger.info(f"Using URL: {url}")
         
         payload = {
             "model": current_model_identifier if current_model_identifier else current_config.model,
@@ -1657,6 +2328,7 @@ async def list_models():
         {"name": "meta-llama/Llama-3.2-1B-Instruct", "size": "1B", "description": "Llama 3.2 1B Instruct (CPU-friendly, gated)", "cpu_friendly": True, "gated": True},
         
         # Larger models (may be slow on CPU)
+        {"name": "Qwen/Qwen2.5-3B-Instruct", "size": "3B", "description": "Qwen 2.5 3B Instruct (GPU-optimized)", "cpu_friendly": False},
         {"name": "mistralai/Mistral-7B-Instruct-v0.2", "size": "7B", "description": "Mistral Instruct (slow on CPU)", "cpu_friendly": False},
         {"name": "RedHatAI/Llama-3.2-1B-Instruct-FP8", "size": "1B", "description": "Llama 3.2 1B Instruct FP8 (GPU-optimized, gated)", "cpu_friendly": False, "gated": True},
         {"name": "RedHatAI/Llama-3.1-8B-Instruct", "size": "8B", "description": "Llama 3.1 8B Instruct (gated)", "cpu_friendly": False, "gated": True},
@@ -2319,6 +2991,45 @@ async def get_chat_template():
         }
 
 
+@app.get("/api/vllm/health")
+async def check_vllm_health():
+    """Check if the vLLM server is healthy and ready to serve requests"""
+    global current_config, vllm_process, current_run_mode
+    
+    # Check if server is running
+    if current_run_mode == "container":
+        status = await container_manager.get_container_status()
+        if not status.get('running', False):
+            return {"success": False, "status_code": 503, "error": "Server not running"}
+    elif current_run_mode == "subprocess":
+        if vllm_process is None or vllm_process.returncode is not None:
+            return {"success": False, "status_code": 503, "error": "Server not running"}
+    
+    if current_config is None:
+        return {"success": False, "status_code": 503, "error": "No configuration"}
+    
+    # Try to call vLLM's health endpoint
+    try:
+        import aiohttp
+        
+        if current_run_mode == "container":
+            base_url = f"http://localhost:{current_config.port}"
+        else:
+            base_url = f"http://{current_config.host}:{current_config.port}"
+        
+        health_url = f"{base_url}/health"
+        
+        timeout = aiohttp.ClientTimeout(total=3)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(health_url) as response:
+                if response.status == 200:
+                    return {"success": True, "status_code": 200, "message": "Server is healthy"}
+                else:
+                    return {"success": False, "status_code": response.status, "error": "Health check failed"}
+    except Exception as e:
+        return {"success": False, "status_code": 503, "error": str(e)}
+
+
 @app.get("/api/vllm/metrics")
 async def get_vllm_metrics():
     """Get vLLM server metrics including KV cache and prefix cache stats"""
@@ -2378,7 +3089,11 @@ async def get_vllm_metrics():
             metrics_url = f"http://{service_name}.{namespace}.svc.cluster.local:{current_config.port}/metrics"
         else:
             # Subprocess mode or local container mode - connect to localhost
-            metrics_url = f"http://{current_config.host}:{current_config.port}/metrics"
+            # Use localhost for container mode since 0.0.0.0 is a bind address, not a valid destination
+            if current_run_mode == "container":
+                metrics_url = f"http://localhost:{current_config.port}/metrics"
+            else:
+                metrics_url = f"http://{current_config.host}:{current_config.port}/metrics"
         
         async with aiohttp.ClientSession() as session:
             try:
@@ -2534,8 +3249,12 @@ async def run_benchmark(config: BenchmarkConfig, server_config: VLLMConfig):
             logger.info(f"Using Kubernetes service URL for benchmark: {url}")
         else:
             # Subprocess mode or local container mode - connect to localhost
-            url = f"http://{server_config.host}:{server_config.port}/v1/chat/completions"
-            logger.info(f"Using localhost URL for benchmark: {url}")
+            # Use localhost for container mode since 0.0.0.0 is a bind address, not a valid destination
+            if current_run_mode == "container":
+                url = f"http://localhost:{server_config.port}/v1/chat/completions"
+            else:
+                url = f"http://{server_config.host}:{server_config.port}/v1/chat/completions"
+            logger.info(f"Using URL for benchmark: {url}")
         
         # Generate a sample prompt of specified length
         prompt_text = " ".join(["benchmark" for _ in range(config.prompt_tokens // 10)])
@@ -2928,17 +3647,19 @@ async def run_guidellm_benchmark(config: BenchmarkConfig, server_config: VLLMCon
 
 
 
-def main():
+def main(host: str = None, port: int = None, reload: bool = False):
     """Main entry point"""
     logger.info("Starting vLLM Playground...")
     
-    # Get port from environment or use default
-    webui_port = int(os.environ.get("WEBUI_PORT", "7860"))
+    # Get host/port from arguments, environment, or use defaults
+    webui_host = host or os.environ.get("WEBUI_HOST", "0.0.0.0")
+    webui_port = port or int(os.environ.get("WEBUI_PORT", "7860"))
     
     uvicorn.run(
         app,
-        host="0.0.0.0",
+        host=webui_host,
         port=webui_port,
+        reload=reload,
         log_level="info"
     )
 

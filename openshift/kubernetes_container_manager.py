@@ -21,7 +21,7 @@ class VLLMKubernetesManager:
     
     POD_NAME = "vllm-service"
     SERVICE_NAME = "vllm-service"
-    DEFAULT_IMAGE = "quay.io/rh_ee_micyang/vllm-service:macos"
+    DEFAULT_IMAGE = "quay.io/rh_ee_micyang/vllm-mac:v0.11.0"
     
     def __init__(self, namespace: Optional[str] = None):
         """
@@ -302,7 +302,7 @@ class VLLMKubernetesManager:
         # Image pull secrets - only needed for private registries
         # Public images don't need pull secrets:
         # - vllm/vllm-openai:v0.11.0 (official community image for GPU)
-        # - quay.io/rh_ee_micyang/vllm-service:cpu (self-built, publicly accessible for CPU)
+        # - quay.io/rh_ee_micyang/vllm-cpu:v0.11.0 (self-built, publicly accessible for CPU)
         # 
         # Example for private registries (not needed for current setup):
         # oc create secret docker-registry my-registry \

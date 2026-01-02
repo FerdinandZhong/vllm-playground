@@ -63,101 +63,48 @@ RUN python3 -m venv vllm_env && \
 # Expose vLLM API port
 EXPOSE 8000
 
-# Create clean startup script using heredoc
-RUN cat > ${HOME}/start_vllm.sh << 'EOF'
+# Create entrypoint script that activates venv and passes through all arguments
+# This allows CLI arguments like the official vLLM image
+RUN cat > ${HOME}/entrypoint.sh << 'EOF'
 #!/bin/bash
 set -e
 
-echo "=== Startup Script Debug ==="
-echo "Python version: $(python3 --version)"
-echo "Activating virtual environment..."
-
+# Activate virtual environment
 source ${HOME}/vllm_env/bin/activate
 
-echo "Virtual environment activated"
-echo "Python location: $(which python3)"
-echo "Pip location: $(which pip3)"
-
-# Check if vLLM is installed
-echo "Checking vLLM installation..."
-if ! python3 -c "import vllm" 2>/dev/null; then
-    echo "ERROR: vLLM is not installed or cannot be imported!"
-    echo "Attempting to show vLLM version anyway..."
-    pip3 show vllm || echo "vLLM package not found"
-    exit 1
-fi
-
-echo "vLLM version: $(python3 -c 'import vllm; print(vllm.__version__)' 2>/dev/null || echo 'unknown')"
-echo "=== End Debug ==="
-echo ""
-
-# Force CPU mode (critical for macOS) - these MUST be set before vLLM starts
+# Force CPU mode (critical for macOS)
 export VLLM_TARGET_DEVICE=${VLLM_TARGET_DEVICE:-cpu}
 export VLLM_PLATFORM=${VLLM_PLATFORM:-cpu}
 export CUDA_VISIBLE_DEVICES=""
 
-# CPU performance tuning (configurable from UI)
+# CPU performance tuning
 export VLLM_CPU_KVCACHE_SPACE=${VLLM_CPU_KVCACHE_SPACE:-4}
 export VLLM_CPU_OMP_THREADS_BIND=${VLLM_CPU_OMP_THREADS_BIND:-auto}
-
-# Configurable parameters (can be passed by orchestrator)
-MODEL=${VLLM_MODEL:-"TinyLlama/TinyLlama-1.1B-Chat-v1.0"}
-HOST=${VLLM_HOST:-"0.0.0.0"}
-PORT=${VLLM_PORT:-8000}
-DTYPE=${VLLM_DTYPE:-"bfloat16"}
-MAX_MODEL_LEN=${VLLM_MAX_MODEL_LEN:-""}
-TRUST_REMOTE_CODE=${VLLM_TRUST_REMOTE_CODE:-""}
-CHAT_TEMPLATE=${VLLM_CHAT_TEMPLATE:-""}
 
 echo "=========================================="
 echo "vLLM Service Container (CPU Mode)"
 echo "=========================================="
-echo "Model: $MODEL"
-echo "Host: $HOST"
-echo "Port: $PORT"
-echo "Dtype: $DTYPE"
+echo "vLLM version: $(python3 -c 'import vllm; print(vllm.__version__)' 2>/dev/null || echo 'unknown')"
 echo "Platform: $VLLM_PLATFORM"
 echo "Device: $VLLM_TARGET_DEVICE"
 echo "CPU KV Cache Space: $VLLM_CPU_KVCACHE_SPACE GB"
-echo "CPU OMP Threads Bind: $VLLM_CPU_OMP_THREADS_BIND"
-echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
-[ -n "$MAX_MODEL_LEN" ] && echo "Max Model Length: $MAX_MODEL_LEN"
 echo "=========================================="
 echo ""
-echo "Environment variables check:"
-env | grep VLLM || echo "No VLLM env vars found"
+echo "Starting vLLM with arguments: $@"
 echo ""
 
-# Build command
-CMD="python3 -m vllm.entrypoints.openai.api_server"
-CMD="$CMD --model $MODEL"
-CMD="$CMD --host $HOST"
-CMD="$CMD --port $PORT"
-CMD="$CMD --dtype $DTYPE"
-
-# Add optional parameters
-[ -n "$MAX_MODEL_LEN" ] && CMD="$CMD --max-model-len $MAX_MODEL_LEN"
-[ "$TRUST_REMOTE_CODE" = "true" ] && CMD="$CMD --trust-remote-code"
-[ -n "$CHAT_TEMPLATE" ] && CMD="$CMD --chat-template $CHAT_TEMPLATE"
-
-echo "Starting vLLM with: $CMD"
-echo ""
-echo "If the container exits here, check: podman logs vllm-service-test"
-echo ""
-
-# Run with error handling
-set +e
-$CMD
-EXIT_CODE=$?
-echo ""
-echo "vLLM exited with code: $EXIT_CODE"
-exit $EXIT_CODE
+# Execute the command with all passed arguments
+exec python3 -m vllm.entrypoints.openai.api_server "$@"
 EOF
 
-RUN chmod +x ${HOME}/start_vllm.sh
+RUN chmod +x ${HOME}/entrypoint.sh
 
-# Use CMD for easier override if needed
-CMD ["/bin/bash", "/home/vllm/start_vllm.sh"]
+# ENTRYPOINT runs our script which activates venv and runs vLLM
+ENTRYPOINT ["/home/vllm/entrypoint.sh"]
+
+# Default CMD - these are the default arguments if none are provided
+# Can be completely overridden by passing arguments to docker/podman run
+CMD ["--model", "TinyLlama/TinyLlama-1.1B-Chat-v1.0", "--host", "0.0.0.0", "--port", "8000", "--dtype", "bfloat16"]
 
 # Health check - verify vLLM API is responding
 HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \

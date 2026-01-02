@@ -2,7 +2,23 @@
 
 A modern web interface for managing and interacting with vLLM servers (www.github.com/vllm-project/vllm). Supports both GPU and CPU modes, with special optimizations for macOS Apple Silicon and enterprise deployment on OpenShift/Kubernetes.
 
-![vLLM Playground Interface](assets/vllm-playground.png)
+### ✨ New UI with Tool Calling Support
+![vLLM Playground Interface](https://raw.githubusercontent.com/micytao/vllm-playground/main/assets/vllm-playground-newUI.png)
+
+### ✨ New UI with Structured Outputs Support
+![vLLM Playground with Structured Outputs](https://raw.githubusercontent.com/micytao/vllm-playground/main/assets/vllm-playground-structured-outputs.png)
+
+### ✨ New UI Enhancements
+
+- **🎨 Modern Dark Theme**: Sleek, professional interface with improved visual hierarchy and contrast
+- **💬 Streamlined Chat Interface**: Clean, distraction-free chat UI with inline expandable panels
+- **🔧 Icon Toolbar**: Compact icon bar for quick access to advanced features (ChatGPT-style)
+  - ⚙️ **Chat Settings**: Temperature and max tokens configuration
+  - 💬 **System Prompt**: Customizable with 8 preset templates (Helpful, Coder, Writer, Teacher, etc.)
+  - 🏗️ **Structured Outputs**: Constrain model responses to Choice, Regex, JSON Schema, or Grammar
+  - 🔧 **Tool Calling/Function Calling**: Define custom tools with parameters for function calling
+  - 🔗 **MCP Servers**: Model Context Protocol integration *(Coming Soon)*
+  - ➕ **RAG**: Retrieval-Augmented Generation support *(Coming Soon)*
 
 ## 📦 Quick Install via PyPI
 
@@ -24,7 +40,7 @@ Open http://localhost:7860 in your browser - that's it! 🚀
 
 > 💡 **Tip**: The `vllm-playground pull` command pre-downloads the large container image with progress display, so you don't have to wait during server startup!
 
-![Pre-pull Container Image](assets/vllm-playground-pull.png)
+![Pre-pull Container Image](https://raw.githubusercontent.com/micytao/vllm-playground/main/assets/vllm-playground-pull.png)
 
 *Pre-download the ~10GB GPU container image with progress display - no more waiting during server startup!*
 
@@ -53,13 +69,13 @@ vllm-playground
 
 **📹 Watch Demo: Automatic Container Startup**
 
-![Start vLLM Demo](assets/start-vllm.gif)
+![Start vLLM Demo](https://raw.githubusercontent.com/micytao/vllm-playground/main/assets/start-vllm.gif)
 
 *See how easy it is: Just click "Start Server" and the container orchestrator automatically starts the vLLM container - no manual installation or configuration needed!*
 
 **📹 Watch Demo: Automatic Container Shutdown**
 
-![Stop vLLM Demo](assets/stop-vllm.gif)
+![Stop vLLM Demo](https://raw.githubusercontent.com/micytao/vllm-playground/main/assets/stop-vllm.gif)
 
 *Clean shutdown: Click "Stop Server" and the container orchestrator gracefully stops the vLLM container with automatic cleanup!*
 
@@ -79,17 +95,17 @@ vllm-playground
 
 Integrated GuideLLM for comprehensive performance benchmarking and analysis. Run load tests and get detailed metrics on throughput, latency, and token generation performance!
 
-![GuideLLM Benchmark Results](assets/guidellm.png)
+![GuideLLM Benchmark Results](https://raw.githubusercontent.com/micytao/vllm-playground/main/assets/guidellm.png)
 
 ## 📚 New: vLLM Community Recipes
 
 **One-click model configurations from the official [vLLM Recipes Repository](https://github.com/vllm-project/recipes)!** Browse community-maintained configurations for popular models like DeepSeek, Qwen, Llama, Mistral, and more.
 
-![vLLM Recipes Browser](assets/vllm-recipes-1.png)
+![vLLM Recipes Browser](https://raw.githubusercontent.com/micytao/vllm-playground/main/assets/vllm-recipes-1.png)
 
 *Browse 17+ model categories with optimized configurations - just click "Load Config" to auto-fill all settings!*
 
-![vLLM Recipes Details](assets/vllm-recipes-2.png)
+![vLLM Recipes Details](https://raw.githubusercontent.com/micytao/vllm-playground/main/assets/vllm-recipes-2.png)
 
 *Each recipe includes hardware requirements, vLLM parameters, and direct links to documentation.*
 
@@ -388,11 +404,36 @@ nano config/vllm_cpu.env
 
 ## ✨ Features
 
-- **🐳 Container Orchestration**: Automatic vLLM container lifecycle management 🆕
+- **💬 Modern Chat Interface**: Streamlined, ChatGPT-style chat experience 🆕
+  - Clean, distraction-free interface with inline expandable panels
+  - Icon toolbar for quick access to advanced features
+  - System prompt templates (8 presets: Helpful, Coder, Writer, Teacher, etc.)
+  - Real-time response metrics and token counting
+- **🏗️ Structured Outputs**: Constrain model responses to specific formats 🆕
+  - **Choice**: Force output to one of specific values (sentiment, yes/no, etc.)
+  - **Regex**: Match output to regex patterns (email, phone, date formats)
+  - **JSON Schema**: Generate valid JSON matching your schema
+  - **Grammar (EBNF)**: Define complex output structures
+  
+  ![Structured Outputs](https://raw.githubusercontent.com/micytao/vllm-playground/main/assets/vllm-playground-structured-outputs.png)
+  
+  *Structured Outputs with Choice mode for sentiment analysis - responses constrained to "positive", "negative", or "neutral"*
+
+- **🔧 Tool Calling / Function Calling**: Define custom tools for the model 🆕
+  - Server-side configuration: Enable in Server Configuration panel before starting
+  - Auto-detected parsers: Llama 3.x, Mistral, Hermes, Qwen, Granite, InternLM
+  - Create tools with name, description, and parameters
+  - Preset tools (Weather, Calculator, Search)
+  - Parallel tool calls support
+  - Per-request tool_choice control (none/auto)
+- **🔗 MCP Server Integration**: Model Context Protocol support *(Coming Soon)* 🆕
+- **➕ RAG Support**: Retrieval-Augmented Generation *(Coming Soon)* 🆕
+- **🐳 Container Orchestration**: Automatic vLLM container lifecycle management
   - Local development: Podman-based orchestration
   - Enterprise deployment: Kubernetes API-based orchestration
   - Seamless switching between local and cloud environments
   - Smart container reuse (fast restarts with same config)
+  - Unified CLI args: All container images now use same interface as official vLLM 🆕
 - **☸️ OpenShift/Kubernetes Deployment**: Production-ready cloud deployment 🆕
   - Dynamic pod creation via Kubernetes API
   - CPU and GPU mode support
@@ -459,6 +500,32 @@ export VLLM_CPU_KVCACHE_SPACE=40
 export VLLM_CPU_OMP_THREADS_BIND=auto
 ```
 
+### Tool Calling Configuration 🆕
+
+Tool calling enables models to use functions/tools you define. This is a **server-side feature** that must be enabled before starting the server.
+
+**How to Enable:**
+1. Check "Enable Tool Calling" in the **Server Configuration** panel
+2. Select a Tool Call Parser (or leave on "Auto-detect")
+3. Start the server
+4. Define tools in the **Tool Calling** panel (🔧 icon in toolbar)
+
+**Supported Models & Parsers:**
+| Model Family | Parser | Example Models |
+|--------------|--------|----------------|
+| Llama 3.x | `llama3_json` | Llama-3.2-1B-Instruct, Llama-3.1-8B-Instruct |
+| Mistral | `mistral` | Mistral-7B-Instruct-v0.3, Mixtral-8x7B |
+| Hermes | `hermes` | Hermes-2-Pro, Hermes-3 |
+| Qwen | `hermes` | Qwen2.5-7B-Instruct, Qwen2-VL |
+| Granite | `granite-20b-fc` | granite-20b-functioncalling |
+| InternLM | `internlm` | InternLM2.5-7B-Chat |
+
+**Per-Request Options:**
+- **Tool Choice**: `none` (disable) or `auto` (let model decide)
+- **Tools**: Define in the Tool Calling panel
+
+**Note:** Tool calling adds `--enable-auto-tool-choice --tool-call-parser <parser>` to the vLLM startup command.
+
 ### Supported Models
 
 **CPU-Optimized Models (Recommended for macOS):**
@@ -517,14 +584,29 @@ python run.py
 ### Container Development
 
 ```bash
-# Build vLLM service container (macOS/CPU)
-podman build -f containers/Containerfile.mac -t vllm-service:macos .
+# Build vLLM service container (macOS/CPU ARM64)
+podman build -f containers/Containerfile.mac -t vllm-mac:v0.11.0 .
+
+# Build vLLM service container (Linux x86_64 CPU)
+podman build -f containers/Containerfile.cpu -t vllm-cpu:v0.11.0 .
 
 # Build Web UI orchestrator container
 podman build -f containers/Containerfile.vllm-playground -t vllm-playground:latest .
 
 # Build OpenShift Web UI container
 podman build -f openshift/Containerfile -t vllm-playground-webui:latest .
+```
+
+**Container Architecture:**
+All custom container images now use the same CLI argument pattern as the official vLLM image:
+```bash
+# All images accept vLLM CLI args directly
+podman run vllm-mac:v0.11.0 \
+  --model meta-llama/Llama-3.2-1B-Instruct \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --enable-auto-tool-choice \
+  --tool-call-parser llama3_json
 ```
 
 ## 📝 License
@@ -606,7 +688,8 @@ Contributions welcome! Please feel free to submit issues and pull requests.
 
 **Container Images:**
 - **GPU Mode**: Official vLLM image (`vllm/vllm-openai:v0.11.0`)
-- **CPU Mode**: Self-built optimized image (`quay.io/rh_ee_micyang/vllm-service:cpu`)
+- **CPU Mode (Linux x86)**: Self-built optimized image (`quay.io/rh_ee_micyang/vllm-cpu:v0.11.0`)
+- **CPU Mode (macOS ARM64)**: Self-built optimized image (`quay.io/rh_ee_micyang/vllm-mac:v0.11.0`) 🆕
 
 **Key Features:**
 - Same UI code works in both environments
@@ -662,9 +745,26 @@ podman logs -f vllm-service
 # Stop and remove container
 podman stop vllm-service && podman rm vllm-service
 
-# Pull latest vLLM image
-podman pull quay.io/rh_ee_micyang/vllm-service:macos
+# Pull latest vLLM images
+podman pull quay.io/rh_ee_micyang/vllm-mac:v0.11.0     # macOS ARM64
+podman pull quay.io/rh_ee_micyang/vllm-cpu:v0.11.0    # Linux x86_64
+podman pull vllm/vllm-openai:v0.11.0                  # GPU (official)
 ```
+
+#### Tool Calling Not Working
+
+Tool calling requires **server-side configuration**. If tools aren't being called:
+
+1. **Verify server was started with tool calling enabled:**
+   - Check "Enable Tool Calling" in Server Configuration BEFORE starting
+   - Look for this in startup logs: `Tool calling enabled with parser: llama3_json`
+
+2. **Verify CLI args are passed:**
+   ```
+   vLLM arguments: --model ... --enable-auto-tool-choice --tool-call-parser llama3_json
+   ```
+
+3. **If using container mode**, ensure the container was started fresh after enabling tool calling (stop and restart if needed)
 
 ### OpenShift/Kubernetes Issues
 
@@ -761,14 +861,14 @@ oc apply -f openshift/manifests/04-webui-deployment.yaml
 
 **Note:** The deployment now uses publicly accessible container images:
 - **GPU**: `vllm/vllm-openai:v0.11.0` (official vLLM image)
-- **CPU**: `quay.io/rh_ee_micyang/vllm-service:cpu` (self-built, publicly accessible)
+- **CPU**: `quay.io/rh_ee_micyang/vllm-cpu:v0.11.0` (self-built, publicly accessible)
 
 No registry authentication or pull secrets are required. If you encounter image pull errors:
 
 ```bash
 # Verify image accessibility
 podman pull vllm/vllm-openai:v0.11.0  # For GPU
-podman pull quay.io/rh_ee_micyang/vllm-service:cpu  # For CPU
+podman pull quay.io/rh_ee_micyang/vllm-cpu:v0.11.0  # For CPU
 
 # Check pod events for details
 oc describe pod <pod-name> -n vllm-playground

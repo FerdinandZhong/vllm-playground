@@ -2,8 +2,8 @@
 vLLM Playground - A web interface for managing and interacting with vLLM
 """
 
-__version__ = "0.0.13"
-__author__ = "vLLM Playground Contributors"
+__version__ = "0.1.0"
+__author__ = "micytao"
 __description__ = "A web interface for managing and interacting with vLLM servers"
 
 from pathlib import Path

@@ -1,0 +1,265 @@
+# 🎉 vLLM Playground v0.1.0 - First Official Release
+
+**Release Date:** January 2, 2026
+
+We're thrilled to announce the first official release of **vLLM Playground** – a modern, feature-rich web interface for managing and interacting with vLLM servers. This release represents months of development and brings together a comprehensive set of features for running LLMs locally and in the cloud.
+
+---
+
+## 🌟 Highlights
+
+### ✨ Brand New Modern UI
+
+A completely redesigned interface with a professional dark theme and intuitive user experience:
+
+- **🎨 Modern Dark Theme** – Sleek, professional interface with improved visual hierarchy and contrast
+- **💬 Streamlined Chat Interface** – Clean, distraction-free chat UI with inline expandable panels
+- **🔧 Icon Toolbar** – Compact ChatGPT-style icon bar for quick access to advanced features:
+  - ⚙️ Chat Settings (temperature, max tokens)
+  - 💬 System Prompt (8 preset templates: Helpful, Coder, Writer, Teacher, and more)
+  - 🏗️ Structured Outputs
+  - 🔧 Tool Calling
+  - 🔗 MCP Servers *(Coming Soon)*
+  - ➕ RAG *(Coming Soon)*
+- **📊 Real-time Response Metrics** – Token counting and generation speed display
+- **🎛️ Resizable Panels** – Customizable layout for your workflow
+
+![New UI](https://raw.githubusercontent.com/micytao/vllm-playground/main/assets/vllm-playground-newUI.png)
+
+---
+
+### 🏗️ Structured Outputs Support
+
+Constrain model responses to specific formats with four powerful modes:
+
+| Mode | Description | Example Use Case |
+|------|-------------|------------------|
+| **Choice** | Force output to specific values | Sentiment analysis (positive/negative/neutral) |
+| **Regex** | Match output to regex patterns | Email, phone, date format validation |
+| **JSON Schema** | Generate valid JSON matching your schema | API responses, structured data extraction |
+| **Grammar (EBNF)** | Define complex output structures | Custom DSLs, formal languages |
+
+![Structured Outputs](https://raw.githubusercontent.com/micytao/vllm-playground/main/assets/vllm-playground-structured-outputs.png)
+
+---
+
+### 🔧 Tool Calling / Function Calling Support
+
+Enable models to use custom tools and functions you define:
+
+- **Server-side Configuration** – Enable in Server Configuration panel before starting
+- **Auto-detected Parsers** – Automatic parser selection for popular models:
+  - Llama 3.x (`llama3_json`)
+  - Mistral (`mistral`)
+  - Hermes (`hermes`)
+  - Qwen (`hermes`)
+  - Granite (`granite-20b-fc`)
+  - InternLM (`internlm`)
+- **Preset Tools** – Weather, Calculator, Search tools included
+- **Custom Tool Creation** – Define tools with name, description, and JSON Schema parameters
+- **Parallel Tool Calls** – Support for multiple simultaneous tool invocations
+- **Per-request Control** – `tool_choice: none` or `auto` per request
+
+---
+
+### 🔌 Coming Soon: MCP & RAG Support
+
+We're actively developing:
+
+- **🔗 MCP Server Integration** – Model Context Protocol for enhanced tool capabilities
+- **➕ RAG Support** – Retrieval-Augmented Generation for knowledge-grounded responses
+
+Stay tuned for these features in upcoming releases!
+
+---
+
+### 🚀 Flexible Deployment: Subprocess & Container Modes
+
+Choose how you want to run vLLM:
+
+#### Subprocess Mode (Default)
+- Run vLLM directly as a Python subprocess
+- Ideal for development and quick testing
+- No container runtime required
+
+#### Container Mode
+- **Podman/Docker orchestration** – Automatic container lifecycle management
+- **Smart container reuse** – Fast restarts with configuration caching
+- **Isolated environment** – vLLM runs in its own container
+- **Cross-platform images**:
+  - GPU: `vllm/vllm-openai:v0.11.0` (official)
+  - CPU x86: `quay.io/rh_ee_micyang/vllm-cpu:v0.11.0`
+  - macOS ARM64: `quay.io/rh_ee_micyang/vllm-mac:v0.11.0`
+
+---
+
+## 📦 Installation
+
+### PyPI (Recommended)
+
+```bash
+# Basic installation
+pip install vllm-playground
+
+# With GuideLLM benchmarking support
+pip install vllm-playground[benchmark]
+
+# Pre-download container image (optional, ~10GB for GPU)
+vllm-playground pull
+
+# Start the playground
+vllm-playground
+```
+
+Open http://localhost:7860 and you're ready! 🚀
+
+### CLI Commands
+
+```bash
+vllm-playground                    # Start with defaults
+vllm-playground --port 8080        # Custom port
+vllm-playground pull               # Pre-download GPU image
+vllm-playground pull --cpu         # Pre-download CPU image
+vllm-playground pull --all         # Pre-download all images
+vllm-playground stop               # Stop running instance
+vllm-playground status             # Check if running
+```
+
+---
+
+## 🎯 Key Features
+
+### 📊 GuideLLM Benchmarking
+
+Integrated GuideLLM for comprehensive performance testing:
+
+- Request statistics (success rate, duration, average times)
+- Token throughput analysis (mean/median tokens per second)
+- Latency percentiles (P50, P75, P90, P95, P99)
+- Configurable load patterns and request rates
+- JSON export for detailed analysis
+
+![GuideLLM Benchmark](https://raw.githubusercontent.com/micytao/vllm-playground/main/assets/guidellm.png)
+
+### 📚 vLLM Community Recipes
+
+One-click model configurations from the official [vLLM Recipes Repository](https://github.com/vllm-project/recipes):
+
+- **17+ Model Categories**: DeepSeek, Qwen, Llama, Mistral, InternVL, and more
+- **Searchable Catalog**: Filter by model name, category, or tags
+- **One-Click Loading**: Auto-fill optimized settings instantly
+- **Hardware Guidance**: Recommended GPU configurations
+- **GitHub Sync**: Keep catalog updated with latest recipes
+
+![vLLM Recipes](https://raw.githubusercontent.com/micytao/vllm-playground/main/assets/vllm-recipes-1.png)
+
+### ☸️ OpenShift/Kubernetes Deployment
+
+Enterprise-ready cloud deployment:
+
+- Dynamic vLLM pod creation via Kubernetes API
+- GPU and CPU mode support
+- RBAC-based security model
+- Automated deployment scripts
+- Same UI and workflow as local setup
+
+```bash
+cd openshift/
+./deploy.sh --gpu    # For GPU clusters
+./deploy.sh --cpu    # For CPU-only clusters
+```
+
+### 💻 macOS Apple Silicon Support
+
+Full support for macOS with ARM64:
+
+- CPU-optimized container images
+- Automatic platform detection
+- Rootless container execution
+- Pre-configured CPU settings
+
+### 🔒 Gated Model Support
+
+Built-in HuggingFace token support for accessing gated models:
+
+- Meta Llama series
+- Google Gemma
+- Other HuggingFace gated models
+
+---
+
+## 🛠️ Technical Details
+
+### Supported Models
+
+**CPU-Optimized (Recommended for macOS):**
+- TinyLlama/TinyLlama-1.1B-Chat-v1.0 (default)
+- meta-llama/Llama-3.2-1B (requires HF token)
+- google/gemma-2-2b (requires HF token)
+- facebook/opt-125m (tiny test model)
+
+**GPU Models:**
+- meta-llama/Llama-2-7b-chat-hf
+- mistralai/Mistral-7B-Instruct-v0.2
+- Any HuggingFace model via custom input
+
+### System Requirements
+
+- **Python**: 3.9+ 
+- **Container Runtime**: Podman or Docker (for container mode)
+- **GPU**: NVIDIA GPU with CUDA support (for GPU mode)
+- **Memory**: 8GB+ RAM (varies by model)
+
+### Dependencies
+
+Core dependencies are minimal and well-maintained:
+- FastAPI + Uvicorn (web server)
+- aiohttp (async HTTP client)
+- Pydantic (data validation)
+- psutil (process management)
+- GuideLLM (optional, for benchmarking)
+
+---
+
+## 📖 Documentation
+
+- **[Quick Start Guide](docs/QUICKSTART.md)** – Get running in minutes
+- **[macOS CPU Setup](docs/MACOS_CPU_GUIDE.md)** – Apple Silicon guide
+- **[Gated Models Guide](docs/GATED_MODELS_GUIDE.md)** – Access Llama, Gemma
+- **[OpenShift Deployment](openshift/README.md)** – Enterprise deployment
+- **[Container Variants](containers/README.md)** – Container image details
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)** – Common issues
+
+---
+
+## 🙏 Acknowledgments
+
+- The [vLLM Project](https://github.com/vllm-project/vllm) team for the amazing inference engine
+- The [GuideLLM](https://github.com/neuralmagic/guidellm) team for benchmarking tools
+- The vLLM community for recipes and feedback
+
+---
+
+## 🔗 Links
+
+- **GitHub**: https://github.com/micytao/vllm-playground
+- **PyPI**: https://pypi.org/project/vllm-playground/
+- **vLLM Documentation**: https://docs.vllm.ai/
+
+---
+
+## 📝 License
+
+Apache-2.0 License
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit issues and pull requests.
+
+---
+
+Made with ❤️ for the vLLM community
+
+

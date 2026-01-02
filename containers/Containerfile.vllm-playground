@@ -71,7 +71,7 @@ WORKDIR /home/playground/vllm-playground
 
 # Environment variables (can be overridden at runtime)
 ENV WEBUI_PORT=7860 \
-    VLLM_IMAGE=quay.io/rh_ee_micyang/vllm-service:macos \
+    VLLM_IMAGE=quay.io/rh_ee_micyang/vllm-mac:v0.11.0 \
     MODELS_DIR=/models \
     CONTAINER_RUNTIME=podman
 

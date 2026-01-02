@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "vllm-playground"
-version = "0.0.13"
+dynamic = ["version"]
 description = "A web interface for managing and interacting with vLLM servers"
 readme = "README.md"
 license = "Apache-2.0"
@@ -84,6 +84,9 @@ include = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["vllm_playground"]
+
+[tool.hatch.version]
+path = "vllm_playground/__init__.py"
 
 [tool.hatch.build]
 include = [
