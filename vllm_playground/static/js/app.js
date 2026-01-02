@@ -77,8 +77,10 @@ class VLLMWebUI {
             // Run mode elements
             runModeSubprocess: document.getElementById('run-mode-subprocess'),
             runModeContainer: document.getElementById('run-mode-container'),
+            runModeRay: document.getElementById('run-mode-ray'),
             runModeSubprocessLabel: document.getElementById('run-mode-subprocess-label'),
             runModeContainerLabel: document.getElementById('run-mode-container-label'),
+            runModeRayLabel: document.getElementById('run-mode-ray-label'),
             runModeHelpText: document.getElementById('run-mode-help-text'),
             gpuSettings: document.getElementById('gpu-settings'),
             
@@ -958,6 +960,7 @@ number ::= [0-9]+`
         // Run mode toggle
         this.elements.runModeSubprocess.addEventListener('change', () => this.toggleRunMode());
         this.elements.runModeContainer.addEventListener('change', () => this.toggleRunMode());
+        if (this.elements.runModeRay) this.elements.runModeRay.addEventListener('change', () => this.toggleRunMode());
         
         // Model Source toggle
         this.elements.modelSourceHub.addEventListener('change', () => this.toggleModelSource());
@@ -1466,16 +1469,25 @@ number ::= [0-9]+`
 
     toggleRunMode() {
         const isSubprocess = this.elements.runModeSubprocess.checked;
-        
+        const isContainer = this.elements.runModeContainer.checked;
+        const isRay = this.elements.runModeRay && this.elements.runModeRay.checked;
+
         // Update button active states
         if (isSubprocess) {
             this.elements.runModeSubprocessLabel.classList.add('active');
             this.elements.runModeContainerLabel.classList.remove('active');
+            if (this.elements.runModeRayLabel) this.elements.runModeRayLabel.classList.remove('active');
             this.elements.runModeHelpText.textContent = 'Subprocess: Direct execution (simpler, local dev)';
-        } else {
+        } else if (isContainer) {
             this.elements.runModeSubprocessLabel.classList.remove('active');
             this.elements.runModeContainerLabel.classList.add('active');
+            if (this.elements.runModeRayLabel) this.elements.runModeRayLabel.classList.remove('active');
             this.elements.runModeHelpText.textContent = 'Container: Isolated environment (recommended for production)';
+        } else if (isRay) {
+            this.elements.runModeSubprocessLabel.classList.remove('active');
+            this.elements.runModeContainerLabel.classList.remove('active');
+            this.elements.runModeRayLabel.classList.add('active');
+            this.elements.runModeHelpText.textContent = 'Ray: Distributed deployment (Ray Serve)';
         }
         
         // Update command preview
@@ -1765,8 +1777,11 @@ number ::= [0-9]+`
         const isCpuMode = this.elements.modeCpu.checked;
         const hfToken = this.elements.hfToken.value.trim();
         
-        // Get run mode (subprocess or container)
-        const runMode = document.getElementById('run-mode-subprocess').checked ? 'subprocess' : 'container';
+        // Get run mode (subprocess, container, or ray)
+        let runMode = 'subprocess';
+        if (document.getElementById('run-mode-subprocess').checked) runMode = 'subprocess';
+        else if (document.getElementById('run-mode-container').checked) runMode = 'container';
+        else if (document.getElementById('run-mode-ray') && document.getElementById('run-mode-ray').checked) runMode = 'ray';
         
         const config = {
             model: model,
@@ -1783,6 +1798,12 @@ number ::= [0-9]+`
             enable_tool_calling: this.elements.enableToolCalling.checked,
             tool_call_parser: this.elements.toolCallParser.value || null  // null = auto-detect
         };
+
+        // Include optional Ray address if provided in the UI
+        const rayAddrEl = document.getElementById('ray-address');
+        if (rayAddrEl && rayAddrEl.value.trim()) {
+            config.ray_address = rayAddrEl.value.trim();
+        }
         
         // Don't send chat template or stop tokens - let vLLM auto-detect them
         // The fields in the UI are for reference/display only
@@ -1877,7 +1898,14 @@ number ::= [0-9]+`
             this.addLog(`Model: ${config.model}`, 'info');
         }
         
-        this.addLog(`Run Mode: ${config.run_mode === 'subprocess' ? 'Subprocess (Direct)' : 'Container (Isolated)'}`, 'info');
+        if (config.run_mode === 'subprocess') {
+            this.addLog('Run Mode: Subprocess (Direct)', 'info');
+        } else if (config.run_mode === 'container') {
+            this.addLog('Run Mode: Container (Isolated)', 'info');
+        } else if (config.run_mode === 'ray') {
+            this.addLog('Run Mode: Ray (Ray Serve)', 'info');
+            if (config.ray_address) this.addLog(`Ray Address: ${config.ray_address}`, 'info');
+        }
         this.addLog(`Compute Mode: ${config.use_cpu ? 'CPU' : 'GPU'}`, 'info');
         
         try {

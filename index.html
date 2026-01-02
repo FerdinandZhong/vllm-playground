@@ -176,8 +176,17 @@
                                         <input type="radio" name="run-mode" id="run-mode-container" value="container">
                                         <span>📦 Container</span>
                                     </label>
+                                    <label class="mode-button" id="run-mode-ray-label">
+                                        <input type="radio" name="run-mode" id="run-mode-ray" value="ray">
+                                        <span>⚙️ Ray</span>
+                                    </label>
                                 </div>
-                                <small class="form-help" id="run-mode-help-text">Subprocess: Direct (local dev), Container: Isolated (production)</small>
+                                <small class="form-help" id="run-mode-help-text">Subprocess: Direct (local dev), Container: Isolated (production), Ray: Distributed (Ray Serve)</small>
+                                <div class="form-group" style="margin-top:8px;">
+                                    <label for="ray-address">Ray Address (optional)</label>
+                                    <input type="text" id="ray-address" class="form-control" placeholder="127.0.0.1:6379">
+                                    <small class="form-help">Optional Ray cluster address for Ray Serve (e.g., 127.0.0.1:6379). Leave empty to auto-detect or start local cluster.</small>
+                                </div>
                             </div>
 
                             <!-- CPU/GPU Mode Toggle -->
