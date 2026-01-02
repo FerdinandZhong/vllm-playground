@@ -119,8 +119,6 @@ class VLLMWebUI {
             sendBtn: document.getElementById('send-btn'),
             clearChatBtn: document.getElementById('clear-chat-btn'),
             clearLogsBtn: document.getElementById('clear-logs-btn'),
-            this.toggleRunMode();
-            this.updateRunMode();
             logsRowToggle: document.getElementById('logs-row-toggle'),
             logsRow: document.getElementById('logs-row'),
             logsRowContent: document.getElementById('logs-row-content'),
