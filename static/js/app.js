@@ -83,7 +83,8 @@ class VLLMWebUI {
             runModeRayLabel: document.getElementById('run-mode-ray-label'),
             runModeHelpText: document.getElementById('run-mode-help-text'),
             gpuSettings: document.getElementById('gpu-settings'),
-            
+            rayAddress: document.getElementById('ray-address'),
+
             // GPU settings
             tensorParallel: document.getElementById('tensor-parallel'),
             gpuMemory: document.getElementById('gpu-memory'),
@@ -111,10 +112,9 @@ class VLLMWebUI {
             // Command Preview
             commandText: document.getElementById('command-text'),
             copyCommandBtn: document.getElementById('copy-command-btn'),
-            
-                runModeSubprocess: document.getElementById('run-mode-subprocess'),
-                runModeContainer: document.getElementById('run-mode-container'),
-                runModeRay: document.getElementById('run-mode-ray'),
+
+            // Buttons
+            startBtn: document.getElementById('start-btn'),
             stopBtn: document.getElementById('stop-btn'),
             sendBtn: document.getElementById('send-btn'),
             clearChatBtn: document.getElementById('clear-chat-btn'),
@@ -961,7 +961,12 @@ number ::= [0-9]+`
         this.elements.runModeSubprocess.addEventListener('change', () => this.toggleRunMode());
         this.elements.runModeContainer.addEventListener('change', () => this.toggleRunMode());
         if (this.elements.runModeRay) this.elements.runModeRay.addEventListener('change', () => this.toggleRunMode());
-        
+
+        // Ray address input - update command preview when typing
+        if (this.elements.rayAddress) {
+            this.elements.rayAddress.addEventListener('input', () => this.updateCommandPreview());
+        }
+
         // Model Source toggle
         this.elements.modelSourceHub.addEventListener('change', () => this.toggleModelSource());
         this.elements.modelSourceLocal.addEventListener('change', () => this.toggleModelSource());
@@ -1777,8 +1782,9 @@ number ::= [0-9]+`
         const isCpuMode = this.elements.modeCpu.checked;
         const hfToken = this.elements.hfToken.value.trim();
         
-        // Get run mode (subprocess or container)
-        const runMode = document.getElementById('run-mode-subprocess').checked ? 'subprocess' : 'container';
+        // Get run mode (subprocess, container, or ray)
+        const runMode = document.getElementById('run-mode-subprocess').checked ? 'subprocess' :
+                        document.getElementById('run-mode-ray').checked ? 'ray' : 'container';
         
         const config = {
             model: model,
@@ -1795,7 +1801,13 @@ number ::= [0-9]+`
             enable_tool_calling: this.elements.enableToolCalling.checked,
             tool_call_parser: this.elements.toolCallParser.value || null  // null = auto-detect
         };
-        
+
+        // Include optional Ray address if provided in the UI
+        const rayAddrEl = document.getElementById('ray-address');
+        if (rayAddrEl && rayAddrEl.value.trim()) {
+            config.ray_address = rayAddrEl.value.trim();
+        }
+
         // Don't send chat template or stop tokens - let vLLM auto-detect them
         // The fields in the UI are for reference/display only
         // Users who need custom templates can set them via server config JSON or API
@@ -2955,15 +2967,37 @@ number ::= [0-9]+`
         const enablePrefixCaching = this.elements.enablePrefixCaching.checked;
         const isCpuMode = this.elements.modeCpu.checked;
         const hfToken = this.elements.hfToken.value.trim();
-        
+
+        // Check run mode
+        const isRay = this.elements.runModeRay && this.elements.runModeRay.checked;
+
         // Build command string
         let cmd;
-        
-        if (isCpuMode) {
+
+        if (isRay) {
+            // Ray mode - show Ray Serve command
+            const rayAddress = document.getElementById('ray-address')?.value?.trim() || '';
+
+            cmd = `# Ray Serve mode - Server started via Ray Serve\n`;
+            cmd += `# The server is managed by Ray, not started directly\n\n`;
+
+            if (rayAddress) {
+                cmd += `# Ray cluster address:\n`;
+                cmd += `ray_address = "${rayAddress}"\n\n`;
+            }
+
+            cmd += `# Model will be served via Ray Serve\n`;
+            cmd += `# See RAY_INTEGRATION.md for deployment details\n\n`;
+            cmd += `# To connect to an existing Ray cluster:\n`;
+            cmd += `# export RAY_ADDRESS="${rayAddress || '<address>'}"\n\n`;
+            cmd += `# Or start a local Ray cluster:\n`;
+            cmd += `# ray start --head\n\n`;
+            cmd += `# Then use the vLLM Ray Serve API to deploy models`;
+        } else if (isCpuMode) {
             // CPU mode: show environment variables and use openai.api_server
             const cpuKvcache = this.elements.cpuKvcache?.value || '4';
             const cpuThreads = this.elements.cpuThreads?.value || 'auto';
-            
+
             cmd = `# CPU Mode - Set environment variables:\n`;
             cmd += `export VLLM_CPU_KVCACHE_SPACE=${cpuKvcache}\n`;
             cmd += `export VLLM_CPU_OMP_THREADS_BIND=${cpuThreads}\n`;
@@ -2984,12 +3018,12 @@ number ::= [0-9]+`
         } else {
             // GPU mode: use openai.api_server
             const gpuDevice = this.elements.gpuDevice.value.trim();
-            
+
             if (gpuDevice) {
                 cmd = `# GPU Device Selection:\n`;
                 cmd += `export CUDA_VISIBLE_DEVICES=${gpuDevice}\n\n`;
             }
-            
+
             if (hfToken) {
                 cmd += `# Set HF token for gated models:\n`;
                 cmd += `export HF_TOKEN=[YOUR_TOKEN]\n\n`;
@@ -2999,11 +3033,11 @@ number ::= [0-9]+`
             cmd += ` \\\n  --host ${host}`;
             cmd += ` \\\n  --port ${port}`;
             cmd += ` \\\n  --dtype ${dtype}`;
-            
+
             // GPU-specific flags
             const tensorParallel = this.elements.tensorParallel.value;
             const gpuMemory = parseFloat(this.elements.gpuMemory.value) / 100;
-            
+
             cmd += ` \\\n  --tensor-parallel-size ${tensorParallel}`;
             cmd += ` \\\n  --gpu-memory-utilization ${gpuMemory}`;
             cmd += ` \\\n  --load-format auto`;
@@ -3012,52 +3046,54 @@ number ::= [0-9]+`
                 cmd += ` \\\n  --max-num-batched-tokens 8192`;
             }
         }
-        
-        if (maxModelLen) {
+
+        if (!isRay && maxModelLen) {
             cmd += ` \\\n  --max-model-len ${maxModelLen}`;
             cmd += ` \\\n  --max-num-batched-tokens ${maxModelLen}`;
         }
-        
-        if (trustRemoteCode) {
+
+        if (!isRay && trustRemoteCode) {
             cmd += ` \\\n  --trust-remote-code`;
         }
-        
-        if (enablePrefixCaching) {
+
+        if (!isRay && enablePrefixCaching) {
             cmd += ` \\\n  --enable-prefix-caching`;
         }
-        
-        // Tool calling flags
-        const enableToolCalling = this.elements.enableToolCalling.checked;
-        const toolCallParser = this.elements.toolCallParser.value;
-        
-        if (enableToolCalling) {
-            // Determine parser (auto-detect based on model name if not explicitly set)
-            let parser = toolCallParser;
-            if (!parser) {
-                // Auto-detect based on model name
-                const modelLower = model.toLowerCase();
-                if (modelLower.includes('llama-3') || modelLower.includes('llama3') || modelLower.includes('llama_3')) {
-                    parser = 'llama3_json';
-                } else if (modelLower.includes('mistral')) {
-                    parser = 'mistral';
-                } else if (modelLower.includes('hermes') || modelLower.includes('qwen')) {
-                    parser = 'hermes';
-                } else if (modelLower.includes('internlm')) {
-                    parser = 'internlm';
-                } else if (modelLower.includes('granite')) {
-                    parser = 'granite-20b-fc';
+
+        // Tool calling flags (not for Ray mode as it may have different handling)
+        if (!isRay) {
+            const enableToolCalling = this.elements.enableToolCalling.checked;
+            const toolCallParser = this.elements.toolCallParser.value;
+
+            if (enableToolCalling) {
+                // Determine parser (auto-detect based on model name if not explicitly set)
+                let parser = toolCallParser;
+                if (!parser) {
+                    // Auto-detect based on model name
+                    const modelLower = model.toLowerCase();
+                    if (modelLower.includes('llama-3') || modelLower.includes('llama3') || modelLower.includes('llama_3')) {
+                        parser = 'llama3_json';
+                    } else if (modelLower.includes('mistral')) {
+                        parser = 'mistral';
+                    } else if (modelLower.includes('hermes') || modelLower.includes('qwen')) {
+                        parser = 'hermes';
+                    } else if (modelLower.includes('internlm')) {
+                        parser = 'internlm';
+                    } else if (modelLower.includes('granite')) {
+                        parser = 'granite-20b-fc';
+                    }
+                }
+
+                if (parser) {
+                    cmd += ` \\\n  --enable-auto-tool-choice`;
+                    cmd += ` \\\n  --tool-call-parser ${parser}`;
                 }
             }
-            
-            if (parser) {
-                cmd += ` \\\n  --enable-auto-tool-choice`;
-                cmd += ` \\\n  --tool-call-parser ${parser}`;
-            }
+
+            // Add chat template flag (vLLM requires this for /v1/chat/completions)
+            cmd += ` \\\n  --chat-template <auto-detected-or-custom>`;
         }
-        
-        // Add chat template flag (vLLM requires this for /v1/chat/completions)
-        cmd += ` \\\n  --chat-template <auto-detected-or-custom>`;
-        
+
         // Update the display (use value for textarea)
         this.elements.commandText.value = cmd;
     }

@@ -20,6 +20,10 @@ from vllm import AsyncLLMEngine
 from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.entrypoints.openai.serving_completion import OpenAIServingCompletion
 from vllm.entrypoints.openai.serving_chat import OpenAIServingChat
+from vllm.entrypoints.openai.serving_models import (
+    OpenAIServingModels,
+    BaseModelPath,
+)
 from vllm.entrypoints.openai.protocol import (
     CompletionRequest,
     ChatCompletionRequest,
@@ -70,23 +74,39 @@ class VLLMEngine:
             self.model_name = engine_config.get('model', 'unknown')
             self.tensor_parallel_size = engine_config.get('tensor_parallel_size', 1)
 
-            # Initialize OpenAI-compatible serving handlers
-            # These handle request parsing, validation, and response formatting
-            model_config = self.engine.engine.get_model_config()
+            # Get model config from engine
+            model_config = self.engine.model_config
 
+            # Create OpenAIServingModels - handles model registry and LoRA support
+            base_model_path = BaseModelPath(
+                name=self.model_name,
+                model_path=model_config.model,
+            )
+            self.openai_serving_models = OpenAIServingModels(
+                engine_client=self.engine,
+                base_model_paths=[base_model_path],
+            )
+
+            # Initialize OpenAI-compatible serving handlers
             # Completion handler
             self.openai_serving_completion = OpenAIServingCompletion(
-                engine=self.engine,
-                model_config=model_config,
-                served_model_names=[self.model_name],
+                engine_client=self.engine,
+                models=self.openai_serving_models,
+                request_logger=None,
+                return_tokens_as_token_ids=False,
+                enable_prompt_tokens_details=False,
+                enable_force_include_usage=False,
+                log_error_stack=False,
             )
 
             # Chat completion handler
             self.openai_serving_chat = OpenAIServingChat(
-                engine=self.engine,
-                model_config=model_config,
-                served_model_names=[self.model_name],
+                engine_client=self.engine,
+                models=self.openai_serving_models,
                 response_role="assistant",
+                request_logger=None,
+                return_tokens_as_token_ids=False,
+                log_error_stack=False,
             )
 
             logger.info(f"✅ vLLM engine initialized successfully")

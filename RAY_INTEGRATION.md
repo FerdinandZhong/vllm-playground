@@ -16,7 +16,7 @@ If you want to use an existing Ray cluster:
 
 ```bash
 cd vllm_playground/ray_serve
-python launch_cluster.py --config configs/local_gpu.yaml start
+python launch_cluster.py --config configs/local_cpu.yaml start
 ```
 
 If you don't start a cluster manually, the Ray backend will automatically start a local cluster when needed.
@@ -24,9 +24,15 @@ If you don't start a cluster manually, the Ray backend will automatically start 
 ### 3. Launch vLLM Playground UI
 
 ```bash
-python -m vllm_playground.cli serve
-# Or
-vllm-playground serve
+# Using the CLI (recommended)
+vllm-playground start --host 0.0.0.0 --port 7860
+
+# Or using Python module directly
+python -m vllm_playground
+
+# Or from the package directory
+cd vllm_playground
+python app.py
 ```
 
 ### 4. Select Ray Mode in UI
@@ -320,16 +326,13 @@ The Ray integration is implemented in:
   - `engines/vllm_config.py` - Configuration builder
 
 - **UI Integration**: [vllm_playground/app.py](vllm_playground/app.py)
-  - Lines 43-54: Ray backend import
-  - Lines 93-99: VLLMConfig with Ray mode
-  - Lines 890-895: Ray mode validation
-  - Lines 1129-1218: Ray start handler
-  - Lines 1290-1301: Ray stop handler
-  - Lines 537-543: Ray status handler
+  - Ray backend import and initialization
+  - VLLMConfig model with Ray mode support
+  - Ray mode validation in `/api/start` endpoint
+  - Ray deployment handlers
 
 ## Next Steps
 
-- **UI Update**: The frontend needs to be updated to show the Ray mode option in the dropdown
 - **Documentation**: See [ray_serve/README.md](vllm_playground/ray_serve/README.md) for Ray backend details
 - **Examples**: Check [examples/ray_deployment_example.py](examples/ray_deployment_example.py) for programmatic usage
 
